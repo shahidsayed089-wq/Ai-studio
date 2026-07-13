@@ -28,9 +28,22 @@ export async function onRequest(context) {
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
-  return new Response(response.body, {
+  const secured = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
+
+  const contentType = headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    return new HTMLRewriter()
+      .on('body', {
+        element(element) {
+          element.append('<script src="/assets/version-sync.js?v=20260714"></script>', { html: true });
+        },
+      })
+      .transform(secured);
+  }
+
+  return secured;
 }
