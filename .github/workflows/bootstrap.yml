@@ -1,4 +1,5 @@
 name: Bootstrap AI Studio
+run-name: Unpack and verify AI Studio
 
 on:
   push:
