@@ -18,12 +18,17 @@ const MODELS = [
   {
     id: 'seedance-2-0',
     provider: 'seedance2.ai',
-    label: 'Seedance 2.0 Live Gateway',
+    label: 'Seedance 2.0 Standard',
+    variants: [
+      { id: 'seedance-2-0', label: 'Standard', resolutions: ['480p', '720p', '1080p', '4k'] },
+      { id: 'seedance-2-0-fast', label: 'Fast', resolutions: ['480p', '720p'] },
+      { id: 'seedance-2-0-mini', label: 'Mini', resolutions: ['480p', '720p'] },
+    ],
     operations: ['text-to-video', 'image-to-video', 'reference-to-video'],
     strengths: ['multimodal references', 'native audio', 'cinematic motion'],
     credential: 'SEEDANCE2_API_KEY',
     disclosure: 'Third-party API gateway, not the official ByteDance/Volcengine domain',
-    betaLimits: { duration: 5, maxResolution: '720p' },
+    limits: { minDuration: 4, maxDuration: 15, imageToVideoImages: 2 },
   },
   {
     id: 'luma-ray-3-2',
