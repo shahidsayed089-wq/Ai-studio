@@ -1,5 +1,5 @@
 const ALLOWED_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-const ALLOWED_HEADERS = 'Content-Type,Authorization,Idempotency-Key';
+const ALLOWED_HEADERS = 'Content-Type,Authorization,Idempotency-Key,X-Beta-Code';
 
 export async function onRequest(context) {
   const origin = context.request.headers.get('Origin');
@@ -13,7 +13,7 @@ export async function onRequest(context) {
         'Access-Control-Allow-Methods': ALLOWED_METHODS,
         'Access-Control-Allow-Headers': ALLOWED_HEADERS,
         'Access-Control-Max-Age': '86400',
-        'Vary': 'Origin',
+        Vary: 'Origin',
       },
     });
   }
@@ -40,7 +40,7 @@ export async function onRequest(context) {
       .on('body', {
         element(element) {
           element.append(
-            '<script src="/assets/version-sync.js?v=20260714-logo"></script><script src="/assets/logo-pass.js?v=20260714-logo"></script>',
+            '<script src="/assets/version-sync.js?v=20260714-ray32"></script><script src="/assets/logo-pass.js?v=20260714-ray32"></script><script src="/assets/live-beta.js?v=20260714-ray32"></script>',
             { html: true },
           );
         },
