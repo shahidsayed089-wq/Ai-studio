@@ -24,12 +24,14 @@ const MODELS = [
     credential: 'BYTEPLUS_API_KEY',
   },
   {
-    id: 'luma-control',
+    id: 'luma-ray-3-2',
     provider: 'luma',
-    label: 'Luma Control',
+    label: 'Luma Ray 3.2 API',
     operations: ['text-to-video', 'image-to-video', 'video-to-video'],
-    strengths: ['keyframes', 'modify video', 'creative control'],
-    credential: 'LUMA_API_KEY',
+    strengths: ['native 1080p', 'multi-keyframe control', 'cinematic motion'],
+    credential: 'LUMA_AGENTS_API_KEY',
+    latestProductModel: 'Ray3.14',
+    latestProductModelApiStatus: 'pending',
   },
   {
     id: 'openai-video',
@@ -44,7 +46,7 @@ const MODELS = [
 export async function onRequestGet({ env }) {
   const models = MODELS.map(({ credential, ...model }) => ({
     ...model,
-    status: env[credential] ? 'live' : 'demo',
+    status: env[credential] || (model.provider === 'luma' && env.LUMA_API_KEY) ? 'live' : 'demo',
   }));
 
   return Response.json({ models });
