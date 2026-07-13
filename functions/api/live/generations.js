@@ -1,7 +1,6 @@
-const LUMA_GENERATIONS_URL = 'https://api.lumalabs.ai/dream-machine/v1/generations';
+const LUMA_GENERATIONS_URL = 'https://agents.lumalabs.ai/v1/generations';
 const ALLOWED_ASPECTS = new Set(['16:9', '9:16', '1:1']);
-const ALLOWED_RESOLUTIONS = new Set(['540p', '720p', '1080', '4k']);
-const ALLOWED_MODELS = new Set(['ray-2', 'ray-flash-2']);
+const ALLOWED_RESOLUTIONS = new Set(['540p', '720p', '1080p']);
 
 function json(data, init = {}) {
   const headers = new Headers(init.headers || {});
@@ -10,27 +9,27 @@ function json(data, init = {}) {
   return new Response(JSON.stringify(data), { ...init, headers });
 }
 
+function apiKey(env) {
+  return env.LUMA_AGENTS_API_KEY || env.LUMA_API_KEY || '';
+}
+
 function betaCode(request) {
   return request.headers.get('x-beta-code') || '';
 }
 
 function normalizeResolution(value) {
-  if (value === '1080p') return '1080';
-  if (value === 'fast') return '720p';
+  if (value === '4K' || value === '4k' || value === '1080') return '1080p';
+  if (value === 'Fast' || value === 'fast') return '720p';
   return ALLOWED_RESOLUTIONS.has(value) ? value : '720p';
 }
 
-function normalizeDuration() {
-  // First live beta is deliberately capped at five seconds to control cost.
-  return '5s';
-}
-
 export async function onRequestPost({ request, env }) {
-  if (!env.LUMA_API_KEY) {
+  const key = apiKey(env);
+  if (!key) {
     return json(
       {
         error: 'provider_not_configured',
-        message: 'LUMA_API_KEY is not configured on the deployment yet.',
+        message: 'LUMA_AGENTS_API_KEY is not configured on the deployment yet.',
       },
       { status: 503 },
     );
@@ -55,26 +54,22 @@ export async function onRequestPost({ request, env }) {
     );
   }
 
-  const model = ALLOWED_MODELS.has(body.model) ? body.model : 'ray-2';
   const aspectRatio = ALLOWED_ASPECTS.has(body.aspectRatio) ? body.aspectRatio : '16:9';
   const resolution = normalizeResolution(body.resolution);
-
   const providerBody = {
+    model: 'ray-3.2',
+    type: 'video',
     prompt,
-    model,
     aspect_ratio: aspectRatio,
-    resolution,
-    duration: normalizeDuration(body.duration),
-    loop: false,
+    user_id: 'shazan-ai-studio-private-beta',
+    video: {
+      resolution,
+      duration: '5s',
+    },
   };
 
   if (typeof body.imageUrl === 'string' && /^https:\/\//i.test(body.imageUrl)) {
-    providerBody.keyframes = {
-      frame0: {
-        type: 'image',
-        url: body.imageUrl,
-      },
-    };
+    providerBody.video.start_frame = { url: body.imageUrl };
   }
 
   let providerResponse;
@@ -83,7 +78,7 @@ export async function onRequestPost({ request, env }) {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        authorization: `Bearer ${env.LUMA_API_KEY}`,
+        authorization: `Bearer ${key}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify(providerBody),
@@ -100,22 +95,24 @@ export async function onRequestPost({ request, env }) {
     return json(
       {
         error: 'provider_rejected',
-        message: payload.detail || payload.message || payload.error || 'Luma rejected the generation request.',
+        message: payload.message || payload.detail || payload.error?.message || payload.error || 'Luma rejected the generation request.',
         providerStatus: providerResponse.status,
+        requestId: providerResponse.headers.get('x-request-id'),
       },
       { status: 502 },
     );
   }
 
+  const outputUrl = Array.isArray(payload.output) ? payload.output.find(item => item?.url)?.url || null : null;
   return json(
     {
       generation: {
         id: payload.id,
         provider: 'luma',
-        model,
+        model: 'ray-3.2',
         status: payload.state === 'completed' ? 'completed' : 'processing',
-        providerState: payload.state || 'dreaming',
-        videoUrl: payload.assets?.video || null,
+        providerState: payload.state || 'queued',
+        videoUrl: outputUrl,
       },
     },
     { status: 202 },
