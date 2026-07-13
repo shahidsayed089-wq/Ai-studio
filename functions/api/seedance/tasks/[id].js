@@ -11,13 +11,20 @@ function betaCode(request) {
   return request.headers.get('x-beta-code') || '';
 }
 
+function seedanceApiKey(env) {
+  const preferred = typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
+  const dashboardLegacy = typeof env['.env file'] === 'string' ? env['.env file'].trim() : '';
+  return preferred || dashboardLegacy;
+}
+
 function errorMessage(payload, fallback) {
   return payload?.error?.message || payload?.message || payload?.error?.code || fallback;
 }
 
 export async function onRequestGet({ request, env, params }) {
-  if (!env.SEEDANCE2_API_KEY) {
-    return json({ error: 'provider_not_configured', message: 'SEEDANCE2_API_KEY is missing.' }, { status: 503 });
+  const apiKey = seedanceApiKey(env);
+  if (!apiKey) {
+    return json({ error: 'provider_not_configured', message: 'Seedance API secret is missing from this deployment.' }, { status: 503 });
   }
 
   if (env.BETA_ACCESS_CODE && betaCode(request) !== env.BETA_ACCESS_CODE) {
@@ -34,7 +41,7 @@ export async function onRequestGet({ request, env, params }) {
     response = await fetch(`${API_ROOT}/${encodeURIComponent(id)}`, {
       headers: {
         accept: 'application/json',
-        authorization: `Bearer ${env.SEEDANCE2_API_KEY}`,
+        authorization: `Bearer ${apiKey}`,
       },
     });
   } catch (error) {
