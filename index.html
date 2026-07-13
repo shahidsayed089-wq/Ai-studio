@@ -1,1 +1,134 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#08090c"><title>AI Studio</title><style>html,body{margin:0;height:100%;background:#07080b;color:#f7f8fb;font-family:Inter,system-ui,sans-serif}.boot{height:100%;display:grid;place-items:center;text-align:center}.orb{width:54px;height:54px;border-radius:18px;background:linear-gradient(145deg,#ffb064,#ff5d3a);margin:auto;animation:p 1s infinite alternate;box-shadow:0 20px 50px rgba(255,93,58,.25)}p{color:#9198a8}@keyframes p{to{transform:scale(.86);filter:brightness(1.2)}}</style></head><body><div class="boot"><div><div class="orb"></div><h2>Opening AI Studio V2</h2><p>Loading the creator operating system…</p></div></div><script src="/assets/v2-0.js"></script><script src="/assets/v2-1.js"></script><script src="/assets/v2-2.js"></script><script type="module">try{const b=Uint8Array.from(atob(window.__AIV2),c=>c.charCodeAt(0));const s=new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'));const h=await new Response(s).text();document.open();document.write(h);document.close()}catch(e){document.body.innerHTML='<div class="boot"><div><h2>Update required</h2><p>Please open this page in the latest Chrome browser.</p></div></div>'}</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#050608" />
+  <meta name="description" content="AI Studio Universe, a cinematic multi-model creation operating system." />
+  <title>AI Studio Universe</title>
+  <link rel="stylesheet" href="/assets/grand-v3.css" />
+</head>
+<body>
+<div class="aurora"></div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">S</div><div class="brand-copy"><b>AI Studio</b><span>Shazan Universe</span></div></div>
+    <div class="nav-title">Create</div>
+    <nav class="nav">
+      <button class="nav-btn active" data-nav="home"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V21h-6v-6H9v6H3z"/></svg>Universe</button>
+      <button class="nav-btn" data-nav="create"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 5.1L18 6l-2.1 4.6L21 12l-5.1 1.4L18 18l-4.6-2.1L12 21l-1.4-5.1L6 18l2.1-4.6L3 12l5.1-1.4L6 6l4.6 2.1z"/></svg>Create Studio<span class="beta">LIVE</span></button>
+      <button class="nav-btn" data-nav="arena"><svg viewBox="0 0 24 24"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg>Model Arena</button>
+    </nav>
+    <div class="nav-title">Production</div>
+    <nav class="nav">
+      <button class="nav-btn" data-nav="projects"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></svg>Projects</button>
+      <button class="nav-btn" data-nav="characters"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.7-5 3.3-7 8-7s7.3 2 8 7"/></svg>Characters</button>
+      <button class="nav-btn" data-nav="library"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 4v16M4 9h16"/></svg>Render Library</button>
+    </nav>
+    <div class="nav-title">Founder</div>
+    <nav class="nav"><button class="nav-btn" data-nav="admin"><svg viewBox="0 0 24 24"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg>Command Center</button></nav>
+    <div class="side-bottom">
+      <div class="credit-card"><small>Creator credits</small><div class="credit-line"><strong id="creditCount">350</strong><button id="topupBtn">Top up</button></div></div>
+      <div class="profile"><div class="avatar">SK</div><div><b>Shazan Khan</b><span>Founder workspace</span></div></div>
+    </div>
+  </aside>
+
+  <main class="shell">
+    <header class="topbar">
+      <div class="top-left"><div class="crumb">AI Studio / <b id="crumbTitle">Universe</b></div><button class="command" id="commandBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Search models, projects and commands<kbd>⌘ K</kbd></button></div>
+      <div class="top-actions"><button class="icon-btn" title="System status"><span id="apiDot" style="width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 14px currentColor"></span></button><button class="ghost-btn" id="newProject">＋ New project</button><button class="primary-btn" data-open-create>✦ Create now</button></div>
+    </header>
+
+    <section class="page active" data-page="home">
+      <div class="content">
+        <div class="hero">
+          <div class="hero-copy">
+            <div class="eyebrow"><i></i><span id="apiStatus">Checking Cloudflare API</span></div>
+            <h1>Build entire <span class="grad">worlds.</span><br>Not just clips.</h1>
+            <p>One cinematic operating system for models, characters, shots, campaigns and films. Direct Kling, Veo, Seedance, Luma, Sora and future engines from one grand creative universe.</p>
+            <div class="hero-actions"><button class="primary-btn" data-open-create>Enter creation studio</button><button class="ghost-btn" data-nav="projects" onclick="gotoPage('projects')">Explore projects</button></div>
+            <div class="hero-stats"><div><b>06</b><span>Model engines</span></div><div><b>∞</b><span>Creative workflows</span></div><div><b>98%</b><span>Continuity target</span></div></div>
+          </div>
+          <div class="hero-visual">
+            <div class="cosmos"><div class="core"></div><div class="orbit o1">KL<small>Kling</small></div><div class="orbit o2">VO<small>Veo</small></div><div class="orbit o3">SD<small>Seedance</small></div><div class="orbit o4">LU<small>Luma</small></div><div class="orbit o5">SO<small>Sora</small></div></div>
+            <div class="floating-card fc1"><b>Auto Director</b><span>Choosing best engine</span></div><div class="floating-card fc2"><b>Character memory</b><span>Identity locked across shots</span></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head"><div><h2>One idea. Five creation portals.</h2><p>Jump from a thought to a complete production workflow.</p></div><button class="ghost-btn" data-open-create>Open studio</button></div>
+          <div class="mode-grid">
+            <article class="mode-card" data-mode="text"><span>CORE</span><div class="mode-icon">✦</div><h3>Text to cinema</h3><p>Direct a single premium shot with camera, light, atmosphere and motion.</p></article>
+            <article class="mode-card" data-mode="image"><span>CONSISTENCY</span><div class="mode-icon">◫</div><h3>Image to video</h3><p>Animate a reference while protecting face, costume and visual identity.</p></article>
+            <article class="mode-card" data-mode="story"><span>AUTO DIRECTOR</span><div class="mode-icon">⌁</div><h3>Story to shots</h3><p>Turn a scene into structured shots, model choices and continuity context.</p></article>
+            <article class="mode-card" data-mode="video"><span>RESTYLE</span><div class="mode-icon">▶</div><h3>Video to video</h3><p>Transform motion, production design, world and visual language.</p></article>
+            <article class="mode-card" data-mode="ad"><span>GROWTH</span><div class="mode-icon">◇</div><h3>Ad factory</h3><p>Generate premium product films, social variants and campaign concepts.</p></article>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head"><div><h2>Production universes</h2><p>Continue where the last shot ended.</p></div><button class="ghost-btn" data-nav="projects" onclick="gotoPage('projects')">View all</button></div>
+          <div class="cards-grid">
+            <article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Dubai Nightfall</b><p>Superspy action sequence with rain, tunnels and continuity-locked hero design.</p><div class="card-meta"><span class="status-dot"><i></i>Active production</span><span>18 shots</span></div></div></article>
+            <article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Nasha Behisaab</b><p>Luxury ship campaign, choreography boards and glamorous hero chemistry.</p><div class="card-meta"><span class="status-dot"><i></i>In edit</span><span>31 shots</span></div></div></article>
+            <article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Abhvan</b><p>Fantasy palace world with character packs, costume continuity and story memory.</p><div class="card-meta"><span class="status-dot"><i></i>Pre-production</span><span>12 scenes</span></div></div></article>
+            <article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Midnight Couture</b><p>AI fashion film system with campaign templates and model arena comparisons.</p><div class="card-meta"><span class="status-dot"><i></i>Rendering</span><span>9 variants</span></div></div></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="create">
+      <div class="content">
+        <div class="section-head"><div><div class="eyebrow"><i></i>Director cockpit</div><h2 style="margin-top:12px">Create a cinematic generation</h2><p>Choose manually or let Auto Director route the shot.</p></div><div class="eyebrow">Selected: <b id="selectedModel">Auto Director</b></div></div>
+        <div class="panel-grid">
+          <div class="panel">
+            <div class="panel-head"><h3>Creation Studio</h3><span id="modeText">Text to video</span></div>
+            <div class="studio">
+              <aside class="model-rail">
+                <button class="model-btn active" data-model="Auto Director"><span class="model-logo">AI</span><span><b>Auto Director</b><small>SMART ROUTER</small></span></button>
+                <button class="model-btn" data-model="Kling 3.0"><span class="model-logo">KL</span><span><b>Kling 3.0</b><small>CINEMATIC</small></span></button>
+                <button class="model-btn" data-model="Veo 3.1"><span class="model-logo">VO</span><span><b>Veo 3.1</b><small>NATIVE AUDIO</small></span></button>
+                <button class="model-btn" data-model="Seedance 2.0"><span class="model-logo">SD</span><span><b>Seedance 2.0</b><small>MULTIMODAL</small></span></button>
+                <button class="model-btn" data-model="Luma Ray"><span class="model-logo">LU</span><span><b>Luma Ray</b><small>CONTROL</small></span></button>
+                <button class="model-btn" data-model="Sora"><span class="model-logo">SO</span><span><b>Sora</b><small>STORY MOTION</small></span></button>
+              </aside>
+              <div class="composer">
+                <div class="composer-tabs"><button class="composer-tab active" data-mode="text">Text to video</button><button class="composer-tab" data-mode="image">Image to video</button><button class="composer-tab" data-mode="story">Story to shots</button><button class="composer-tab" data-mode="video">Video restyle</button><button class="composer-tab" data-mode="ad">Ad factory</button></div>
+                <div class="prompt-shell"><textarea id="prompt" placeholder="Describe the world, subject, camera, motion, light and emotion...">A helmeted Indian superspy speeds through a rain-soaked Dubai tunnel at night, low rear tracking camera, grounded IMAX action realism, blue cinematic lighting, red laser grid activating ahead.</textarea><div class="prompt-tools"><div class="tool-group"><button class="mini-btn" id="randomPrompt">Surprise me</button><button class="mini-btn">Negative prompt</button><button class="mini-btn">Shot memory</button></div><button class="enhance-btn" id="enhancePrompt">✦ Enhance with Auto Director</button></div></div>
+                <div class="settings-grid"><div class="field"><label>Aspect ratio</label><select><option>16:9 Cinema</option><option>9:16 Vertical</option><option>1:1 Square</option><option>2.39:1 Scope</option></select></div><div class="field"><label>Duration</label><select><option>5 seconds</option><option selected>10 seconds</option><option>15 seconds</option></select></div><div class="field"><label>Resolution</label><select><option>720p Fast</option><option selected>1080p</option><option>4K Master</option></select></div><div class="field"><label>Camera language</label><select><option>Auto Director</option><option>Grounded cinema</option><option>Luxury commercial</option><option>Documentary</option></select></div></div>
+                <div class="upload-row"><div class="upload-box"><b>＋ Character reference</b>Face, wardrobe or identity pack</div><div class="upload-box"><b>＋ Shot reference</b>Image, video or previous generation</div></div>
+                <div class="generate-line"><div class="estimate">Estimated cost <b>18 credits</b><br>Live providers require API credentials</div><button class="big-generate" id="generateBtn">Generate masterpiece</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>Director Preview</h3><span>16:9 · 10 sec</span></div>
+            <div class="panel-body"><div class="preview-stage" id="previewStage"><div class="preview-hud"><span class="hud-pill">AUTO DIRECTOR</span><span class="hud-pill">DEMO MODE</span></div><div class="play-btn">▶</div><div class="preview-caption"><div><b id="renderStatus">Ready to direct</b><span>Preview becomes available after render</span></div><span>00:10</span></div></div><div class="progress" id="progress"><i id="renderBar"></i></div>
+              <div class="section-head" style="margin-top:18px"><div><h2 style="font-size:15px">Continuity brain</h2><p>Context attached to this shot</p></div></div>
+              <div class="tag-row"><span class="tag">Hero identity locked</span><span class="tag">Rainy Dubai</span><span class="tag">Blue night palette</span><span class="tag">Bike continuity</span><span class="tag">Previous shot memory</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="section"><div class="section-head"><div><h2>Generation queue</h2><p>Every render remains auditable and recoverable.</p></div></div><div class="table" id="jobsTable"></div></div>
+      </div>
+    </section>
+
+    <section class="page" data-page="projects"><div class="content"><div class="section-head"><div><div class="eyebrow"><i></i>Production hub</div><h2 style="margin-top:12px">Your cinematic universes</h2><p>Scripts, shots, characters, assets, versions and exports live together.</p></div><button class="primary-btn" id="newProject">＋ New universe</button></div><div class="cards-grid"><article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Dubai Nightfall</b><p>Action film universe · 18 shots · 4 characters</p><div class="card-meta"><span class="pill green">Active</span><span>Updated now</span></div></div></article><article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Nasha Behisaab</b><p>Music video · 31 shots · ship campaign</p><div class="card-meta"><span class="pill orange">Editing</span><span>2 hours ago</span></div></div></article><article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Abhvan</b><p>Fantasy feature · 12 scenes · story bible</p><div class="card-meta"><span class="pill violet">Planning</span><span>Yesterday</span></div></div></article><article class="project-card"><div class="project-cover"></div><div class="card-copy"><b>Midnight Couture</b><p>Fashion campaign · 9 outputs · 3 ratios</p><div class="card-meta"><span class="pill orange">Rendering</span><span>Yesterday</span></div></div></article></div></div></section>
+
+    <section class="page" data-page="characters"><div class="content"><div class="section-head"><div><div class="eyebrow"><i></i>Character universe</div><h2 style="margin-top:12px">Identity that survives every model</h2><p>Faces, bodies, wardrobe, expression packs and continuity memory.</p></div><button class="primary-btn">＋ Build character</button></div><div class="cards-grid"><article class="character-card"><div class="character-portrait"></div><div class="card-copy"><b>Agent Raaz</b><p>Black tactical suit, red-gold accents, helmet identity pack.</p><div class="continuity"><i style="width:96%"></i></div><div class="card-meta"><span>Continuity 96%</span><span>18 shots</span></div></div></article><article class="character-card"><div class="character-portrait"></div><div class="card-copy"><b>Meera</b><p>Artist profile, rain wardrobe, lakeside and rooftop variants.</p><div class="continuity"><i style="width:92%"></i></div><div class="card-meta"><span>Continuity 92%</span><span>22 shots</span></div></div></article><article class="character-card"><div class="character-portrait"></div><div class="card-copy"><b>Aarav</b><p>Singer identity pack, guitar poses and emotional close-ups.</p><div class="continuity"><i style="width:89%"></i></div><div class="card-meta"><span>Continuity 89%</span><span>17 shots</span></div></div></article><article class="character-card"><div class="character-portrait"></div><div class="card-copy"><b>Empress Aira</b><p>Fantasy royal design, palace wardrobe and battle variants.</p><div class="continuity"><i style="width:94%"></i></div><div class="card-meta"><span>Continuity 94%</span><span>12 scenes</span></div></div></article></div></div></section>
+
+    <section class="page" data-page="arena"><div class="content"><div class="section-head"><div><div class="eyebrow"><i></i>Model intelligence</div><h2 style="margin-top:12px">Same prompt. Different engines. One winner.</h2><p>Compare motion, identity, audio, latency and credit efficiency.</p></div><button class="primary-btn">Run comparison</button></div><div class="arena-grid"><article class="arena-card"><div class="arena-screen"></div><div class="arena-head"><div><b>Kling 3.0</b><div class="tag-row"><span class="tag">Motion 9.2</span><span class="tag">Identity 9.0</span></div></div><div class="score">9.1 <small>/10</small></div></div></article><article class="arena-card"><div class="arena-screen alt"></div><div class="arena-head"><div><b>Veo 3.1</b><div class="tag-row"><span class="tag">Audio 9.6</span><span class="tag">Detail 9.3</span></div></div><div class="score">9.4 <small>/10</small></div></div></article></div><div class="section"><div class="section-head"><div><h2>Auto Director recommendation</h2><p>Veo for native sound, Kling for grounded action, Seedance for multimodal continuity.</p></div></div><div class="panel"><div class="panel-body"><div class="metric-grid"><div class="metric"><span>Best quality</span><b>Veo</b><small>+4.1% score</small></div><div class="metric"><span>Best value</span><b>Kling</b><small>38% lower cost</small></div><div class="metric"><span>Fastest</span><b>Seedance</b><small>2.4× faster</small></div><div class="metric"><span>Best control</span><b>Luma</b><small>Strong keyframes</small></div></div></div></div></div></div></section>
+
+    <section class="page" data-page="library"><div class="content"><div class="section-head"><div><div class="eyebrow"><i></i>Owned media</div><h2 style="margin-top:12px">Render library</h2><p>Generated videos, references, thumbnails and final masters.</p></div><button class="ghost-btn">Upload asset</button></div><div class="cards-grid"><article class="template-card" data-prompt="Rainy Dubai tunnel action shot"><div class="project-cover"></div><div class="card-copy"><b>Dubai tunnel test</b><p>Kling · 10 sec · 16:9</p></div></article><article class="template-card" data-prompt="Luxury fragrance commercial on a black mirror surface"><div class="project-cover"></div><div class="card-copy"><b>Fragrance hero film</b><p>Veo · 8 sec · 9:16</p></div></article><article class="template-card" data-prompt="Fantasy palace reveal at golden hour"><div class="project-cover"></div><div class="card-copy"><b>Palace reveal</b><p>Seedance · 15 sec · 2.39:1</p></div></article><article class="template-card" data-prompt="High-fashion model in a glass city"><div class="project-cover"></div><div class="card-copy"><b>Couture city</b><p>Luma · 5 sec · 1:1</p></div></article></div></div></section>
+
+    <section class="page" data-page="admin"><div class="content"><div class="section-head"><div><div class="eyebrow"><i></i>Founder command</div><h2 style="margin-top:12px">The machine behind the cinema</h2><p>Usage, provider health, credits, jobs and growth signals.</p></div><button class="ghost-btn">Export report</button></div><div class="metric-grid"><div class="metric"><span>Total generations</span><b>1,284</b><small>+18.4% this week</small></div><div class="metric"><span>Active creators</span><b>327</b><small>+42 today</small></div><div class="metric"><span>Success rate</span><b>94.8%</b><small>+1.2% improvement</small></div><div class="metric"><span>Credit revenue</span><b>₹1.8L</b><small>Demo projection</small></div></div><div class="section"><div class="panel"><div class="panel-head"><h3>Provider constellation</h3><span>Feature-flagged adapters</span></div><div class="panel-body"><div class="table"><div class="tr head"><div>Provider</div><div>Mode</div><div>Status</div><div>Latency</div><div>Success</div></div><div class="tr"><div class="job"><div class="job-icon">KL</div><b>Kling</b></div><div>Adapter</div><div><span class="pill orange">Credentials needed</span></div><div>--</div><div>--</div></div><div class="tr"><div class="job"><div class="job-icon">VO</div><b>Veo</b></div><div>Adapter</div><div><span class="pill orange">Credentials needed</span></div><div>--</div><div>--</div></div><div class="tr"><div class="job"><div class="job-icon">LU</div><b>Luma</b></div><div>Adapter</div><div><span class="pill orange">Credentials needed</span></div><div>--</div><div>--</div></div></div></div></div></div></div></section>
+  </main>
+</div>
+
+<nav class="mobile-nav"><button class="active" data-nav="home"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V21h-6v-6H9v6H3z"/></svg>Home</button><button data-nav="create"><svg viewBox="0 0 24 24"><path d="m12 3 2 6 6 3-6 3-2 6-2-6-6-3 6-3z"/></svg>Create</button><button data-nav="projects"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></svg>Projects</button><button data-nav="characters"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.7-5 3.3-7 8-7s7.3 2 8 7"/></svg>Characters</button><button data-nav="arena"><svg viewBox="0 0 24 24"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg>Arena</button></nav>
+<div class="toast" id="toast"></div>
+<div class="modal" id="modal"><div class="modal-card"><h3>Add creator credits</h3><p>This is a demo top-up. Production payments will use Razorpay or Stripe with signed server verification and an immutable credit ledger.</p><div class="modal-actions"><button class="ghost-btn" id="closeModal">Cancel</button><button class="primary-btn" id="confirmTopup">Add 500 demo credits</button></div></div></div>
+<script src="/assets/grand-v3.js"></script>
+</body>
+</html>
