@@ -1,7 +1,8 @@
 const API_URL = 'https://api.seedance2.ai/v1/videos/generations';
 const MODELS = new Set(['seedance-2-0', 'seedance-2-0-fast', 'seedance-2-0-mini']);
 const ASPECTS = new Set(['16:9', '9:16', '4:3', '3:4', '21:9', '1:1', 'adaptive']);
-const RESOLUTIONS = new Set(['480p', '720p']);
+const STANDARD_RESOLUTIONS = new Set(['480p', '720p', '1080p', '4k']);
+const LITE_RESOLUTIONS = new Set(['480p', '720p']);
 
 function json(data, init = {}) {
   const headers = new Headers(init.headers || {});
@@ -16,12 +17,24 @@ function betaCode(request) {
 
 function seedanceApiKey(env) {
   const preferred = typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
-  const dashboardLegacy = typeof env['.env file'] === 'string' ? env['.env file'].trim() : '';
-  return preferred || dashboardLegacy;
+  const legacy = typeof env['.env file'] === 'string' ? env['.env file'].trim() : '';
+  return preferred || legacy;
 }
 
 function errorMessage(payload, fallback) {
   return payload?.error?.message || payload?.message || payload?.error?.code || fallback;
+}
+
+function normalizeDuration(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 5;
+  return Math.min(15, Math.max(4, Math.round(number)));
+}
+
+function normalizeResolution(model, value) {
+  const requested = String(value || '').toLowerCase();
+  const allowed = model === 'seedance-2-0' ? STANDARD_RESOLUTIONS : LITE_RESOLUTIONS;
+  return allowed.has(requested) ? requested : '720p';
 }
 
 export async function onRequestPost({ request, env }) {
@@ -30,7 +43,7 @@ export async function onRequestPost({ request, env }) {
     return json(
       {
         error: 'provider_not_configured',
-        message: 'Add the encrypted secret SEEDANCE2_API_KEY, then redeploy the Pages project.',
+        message: 'SEEDANCE2_API_KEY is not configured on this deployment yet.',
       },
       { status: 503 },
     );
@@ -54,7 +67,8 @@ export async function onRequestPost({ request, env }) {
 
   const model = MODELS.has(body.model) ? body.model : 'seedance-2-0';
   const aspectRatio = ASPECTS.has(body.aspectRatio) ? body.aspectRatio : '16:9';
-  const resolution = RESOLUTIONS.has(body.resolution) ? body.resolution : '720p';
+  const duration = normalizeDuration(body.duration);
+  const resolution = normalizeResolution(model, body.resolution);
   const imageUrls = Array.isArray(body.imageUrls)
     ? body.imageUrls.filter(url => typeof url === 'string' && /^https:\/\//i.test(url)).slice(0, 2)
     : [];
@@ -65,7 +79,7 @@ export async function onRequestPost({ request, env }) {
     input: {
       prompt,
       generation_type: generationType,
-      duration: 5,
+      duration,
       aspect_ratio: aspectRatio,
       resolution,
       generate_audio: body.generateAudio !== false,
@@ -118,6 +132,9 @@ export async function onRequestPost({ request, env }) {
         id: payload.taskId,
         provider: 'seedance2.ai',
         model,
+        duration,
+        resolution,
+        mode: generationType,
         status: 'queued',
         credits: payload.credits ?? null,
       },
