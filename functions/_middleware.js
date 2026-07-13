@@ -39,7 +39,10 @@ export async function onRequest(context) {
     return new HTMLRewriter()
       .on('body', {
         element(element) {
-          element.append('<script src="/assets/version-sync.js?v=20260714"></script>', { html: true });
+          element.append(
+            '<script src="/assets/version-sync.js?v=20260714-logo"></script><script src="/assets/logo-pass.js?v=20260714-logo"></script>',
+            { html: true },
+          );
         },
       })
       .transform(secured);
