@@ -14,16 +14,23 @@ function betaCode(request) {
   return request.headers.get('x-beta-code') || '';
 }
 
+function seedanceApiKey(env) {
+  const preferred = typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
+  const dashboardLegacy = typeof env['.env file'] === 'string' ? env['.env file'].trim() : '';
+  return preferred || dashboardLegacy;
+}
+
 function errorMessage(payload, fallback) {
   return payload?.error?.message || payload?.message || payload?.error?.code || fallback;
 }
 
 export async function onRequestPost({ request, env }) {
-  if (!env.SEEDANCE2_API_KEY) {
+  const apiKey = seedanceApiKey(env);
+  if (!apiKey) {
     return json(
       {
         error: 'provider_not_configured',
-        message: 'SEEDANCE2_API_KEY is not configured on this deployment yet.',
+        message: 'Add the encrypted secret SEEDANCE2_API_KEY, then redeploy the Pages project.',
       },
       { status: 503 },
     );
@@ -76,7 +83,7 @@ export async function onRequestPost({ request, env }) {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        authorization: `Bearer ${env.SEEDANCE2_API_KEY}`,
+        authorization: `Bearer ${apiKey}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify(providerBody),
