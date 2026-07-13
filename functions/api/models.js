@@ -45,10 +45,20 @@ const MODELS = [
   },
 ];
 
+function hasCredential(env, model) {
+  if (model.provider === 'seedance2.ai') {
+    return Boolean(env.SEEDANCE2_API_KEY || env['.env file']);
+  }
+  if (model.provider === 'luma') {
+    return Boolean(env.LUMA_AGENTS_API_KEY || env.LUMA_API_KEY);
+  }
+  return Boolean(env[model.credential]);
+}
+
 export async function onRequestGet({ env }) {
   const models = MODELS.map(({ credential, ...model }) => ({
     ...model,
-    status: env[credential] || (model.provider === 'luma' && env.LUMA_API_KEY) ? 'live' : 'demo',
+    status: hasCredential(env, { ...model, credential }) ? 'live' : 'demo',
   }));
 
   return Response.json({ models });
