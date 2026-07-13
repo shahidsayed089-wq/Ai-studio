@@ -40,7 +40,7 @@ export async function onRequest(context) {
       .on('body', {
         element(element) {
           element.append(
-            '<script src="/assets/version-sync.js?v=20260714-ray32"></script><script src="/assets/logo-pass.js?v=20260714-ray32"></script><script src="/assets/live-beta.js?v=20260714-ray32"></script>',
+            '<script src="/assets/version-sync.js?v=20260714-seedance"></script><script src="/assets/logo-pass.js?v=20260714-seedance"></script><script src="/assets/live-beta.js?v=20260714-seedance"></script><script src="/assets/seedance-live.js?v=20260714-seedance"></script>',
             { html: true },
           );
         },
