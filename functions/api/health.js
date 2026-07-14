@@ -11,7 +11,11 @@ export async function onRequestGet({ env }) {
     seedanceMultimodalUpload: Boolean(env.MEDIA),
     lumaAgents: Boolean(env.LUMA_AGENTS_API_KEY || env.LUMA_API_KEY),
     betaGate: Boolean(env.BETA_ACCESS_CODE),
+    walletSessionSigning: typeof env.SESSION_SIGNING_KEY === 'string' && env.SESSION_SIGNING_KEY.trim().length >= 24,
+    walletAdminKey: typeof env.ADMIN_WALLET_KEY === 'string' && env.ADMIN_WALLET_KEY.trim().length >= 24,
   };
+
+  checks.walletReady = checks.database && checks.walletSessionSigning;
 
   const liveModels = [
     ...(checks.seedance2Api ? ['seedance-2-0', 'seedance-2-0-fast', 'seedance-2-0-mini'] : []),
@@ -21,10 +25,19 @@ export async function onRequestGet({ env }) {
   return Response.json({
     ok: true,
     service: 'ai-studio-api',
-    version: '0.5.0-seedance-multimodal',
-    mode: liveModels.length ? 'private-live-beta' : 'bootstrap',
+    version: '0.6.0-real-wallet',
+    mode: liveModels.length && checks.walletReady ? 'wallet-protected-live-beta' : 'setup-required',
     liveModels,
     primaryLiveModel: checks.seedance2Api ? 'seedance-2-0' : checks.lumaAgents ? 'ray-3.2' : null,
+    wallet: {
+      ready: checks.walletReady,
+      unit: 'AI Studio credit',
+      conversion: '1 AI Studio credit = 1 upstream provider credit',
+      reserveBeforeSubmit: true,
+      captureOnSuccess: true,
+      automaticRefundOnFailure: true,
+      ledger: true,
+    },
     seedanceCapabilities: {
       variants: ['standard', 'fast', 'mini'],
       durationSeconds: { min: 4, max: 15 },
