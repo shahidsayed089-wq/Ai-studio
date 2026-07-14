@@ -1,7 +1,5 @@
 function seedanceApiKey(env) {
-  const preferred = typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
-  const dashboardLegacy = typeof env['.env file'] === 'string' ? env['.env file'].trim() : '';
-  return preferred || dashboardLegacy;
+  return typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
 }
 
 export async function onRequestGet({ env }) {
@@ -23,7 +21,7 @@ export async function onRequestGet({ env }) {
   return Response.json({
     ok: true,
     service: 'ai-studio-api',
-    version: '0.4.0-seedance-full-controls',
+    version: '0.4.2-clean-bindings',
     mode: liveModels.length ? 'private-live-beta' : 'bootstrap',
     liveModels,
     primaryLiveModel: checks.seedance2Api ? 'seedance-2-0' : checks.lumaAgents ? 'ray-3.2' : null,
