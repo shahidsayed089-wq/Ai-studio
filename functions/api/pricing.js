@@ -18,7 +18,7 @@ export async function onRequestGet({ env }) {
       mode: String(env.RAZORPAY_KEY_ID || '').startsWith('rzp_test_') ? 'test' : checkoutReady ? 'live' : 'not-configured',
     },
     disclosure: 'Credit prices are AI Studio retail prices. Generation usage is charged in Seedance2.ai API credits on a 1:1 basis.',
-    taxNote: 'Taxes, if applicable, are handled at checkout and on the issued invoice.',
+    taxNote: 'Displayed amounts are the exact checkout amounts. Merchant GST and invoice compliance must be configured before live sales.',
   }, {
     headers: { 'cache-control': 'no-store' },
   });
