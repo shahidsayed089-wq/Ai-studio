@@ -3,6 +3,10 @@ const MODELS = new Set(['seedance-2-0', 'seedance-2-0-fast', 'seedance-2-0-mini'
 const ASPECTS = new Set(['16:9', '9:16', '4:3', '3:4', '21:9', '1:1', 'adaptive']);
 const STANDARD_RESOLUTIONS = new Set(['480p', '720p', '1080p', '4k']);
 const LITE_RESOLUTIONS = new Set(['480p', '720p']);
+const MAX_IMAGES = 9;
+const MAX_VIDEOS = 3;
+const MAX_AUDIOS = 3;
+const MAX_MATERIALS = 12;
 
 function json(data, init = {}) {
   const headers = new Headers(init.headers || {});
@@ -33,6 +37,13 @@ function normalizeResolution(model, value) {
   const requested = String(value || '').toLowerCase();
   const allowed = model === 'seedance-2-0' ? STANDARD_RESOLUTIONS : LITE_RESOLUTIONS;
   return allowed.has(requested) ? requested : '720p';
+}
+
+function cleanUrls(value, limit) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(url => typeof url === 'string' && /^https:\/\//i.test(url))
+    .slice(0, limit);
 }
 
 export async function onRequestPost({ request, env }) {
@@ -67,27 +78,40 @@ export async function onRequestPost({ request, env }) {
   const aspectRatio = ASPECTS.has(body.aspectRatio) ? body.aspectRatio : '16:9';
   const duration = normalizeDuration(body.duration);
   const resolution = normalizeResolution(model, body.resolution);
-  const imageUrls = Array.isArray(body.imageUrls)
-    ? body.imageUrls.filter(url => typeof url === 'string' && /^https:\/\//i.test(url)).slice(0, 2)
-    : [];
+  const imageUrls = cleanUrls(body.imageUrls, MAX_IMAGES);
+  const videoUrls = cleanUrls(body.videoUrls, MAX_VIDEOS);
+  const audioUrls = cleanUrls(body.audioUrls, MAX_AUDIOS);
+  const materialCount = imageUrls.length + videoUrls.length + audioUrls.length;
 
-  const generationType = imageUrls.length ? 'image-to-video' : 'text-to-video';
-  const providerBody = {
-    model,
-    input: {
-      prompt,
-      generation_type: generationType,
-      duration,
-      aspect_ratio: aspectRatio,
-      resolution,
-      generate_audio: body.generateAudio !== false,
-      watermark: false,
-      web_search: false,
-      return_last_frame: true,
-      seed: Number.isInteger(body.seed) ? body.seed : -1,
-      ...(imageUrls.length ? { image_urls: imageUrls } : {}),
-    },
+  if (materialCount > MAX_MATERIALS) {
+    return json({ error: 'too_many_materials', message: 'Seedance accepts at most 12 reference materials in total.' }, { status: 400 });
+  }
+  if (audioUrls.length && !imageUrls.length && !videoUrls.length) {
+    return json({ error: 'audio_requires_visual', message: 'Audio references require at least one image or video reference.' }, { status: 400 });
+  }
+
+  const generationType = materialCount === 0
+    ? 'text-to-video'
+    : videoUrls.length || audioUrls.length || imageUrls.length > 2
+      ? 'reference-to-video'
+      : 'image-to-video';
+
+  const input = {
+    prompt,
+    generation_type: generationType,
+    duration,
+    aspect_ratio: aspectRatio,
+    resolution,
+    generate_audio: body.generateAudio !== false,
+    watermark: false,
+    web_search: false,
+    return_last_frame: true,
+    seed: Number.isInteger(body.seed) ? body.seed : -1,
   };
+
+  if (imageUrls.length) input.image_urls = imageUrls;
+  if (generationType === 'reference-to-video' && videoUrls.length) input.video_urls = videoUrls;
+  if (generationType === 'reference-to-video' && audioUrls.length) input.audio_urls = audioUrls;
 
   let response;
   try {
@@ -98,7 +122,7 @@ export async function onRequestPost({ request, env }) {
         authorization: `Bearer ${apiKey}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify(providerBody),
+      body: JSON.stringify({ model, input }),
     });
   } catch (error) {
     return json(
@@ -133,6 +157,12 @@ export async function onRequestPost({ request, env }) {
         duration,
         resolution,
         mode: generationType,
+        materials: {
+          images: imageUrls.length,
+          videos: videoUrls.length,
+          audios: audioUrls.length,
+          total: materialCount,
+        },
         status: 'queued',
         credits: payload.credits ?? null,
       },
