@@ -12,9 +12,7 @@ function betaCode(request) {
 }
 
 function seedanceApiKey(env) {
-  const preferred = typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
-  const dashboardLegacy = typeof env['.env file'] === 'string' ? env['.env file'].trim() : '';
-  return preferred || dashboardLegacy;
+  return typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
 }
 
 function errorMessage(payload, fallback) {
@@ -24,7 +22,7 @@ function errorMessage(payload, fallback) {
 export async function onRequestGet({ request, env, params }) {
   const apiKey = seedanceApiKey(env);
   if (!apiKey) {
-    return json({ error: 'provider_not_configured', message: 'Seedance API secret is missing from this deployment.' }, { status: 503 });
+    return json({ error: 'provider_not_configured', message: 'SEEDANCE2_API_KEY is missing from this deployment.' }, { status: 503 });
   }
 
   if (env.BETA_ACCESS_CODE && betaCode(request) !== env.BETA_ACCESS_CODE) {
