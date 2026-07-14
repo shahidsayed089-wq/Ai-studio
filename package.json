@@ -1,0 +1,12 @@
+{
+  "name": "ai-studio-cloudflare-pages",
+  "version": "0.4.1",
+  "private": true,
+  "description": "AI Studio static frontend and Cloudflare Pages Functions",
+  "scripts": {
+    "build": "node -e \"console.log('AI Studio Cloudflare Pages build ready')\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
