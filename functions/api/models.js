@@ -25,10 +25,19 @@ const MODELS = [
       { id: 'seedance-2-0-mini', label: 'Mini', resolutions: ['480p', '720p'] },
     ],
     operations: ['text-to-video', 'image-to-video', 'reference-to-video'],
-    strengths: ['multimodal references', 'native audio', 'cinematic motion'],
+    strengths: ['multimodal references', 'native audio', 'camera and motion replication'],
     credential: 'SEEDANCE2_API_KEY',
     disclosure: 'Third-party API gateway, not the official ByteDance/Volcengine domain',
-    limits: { minDuration: 4, maxDuration: 15, imageToVideoImages: 2 },
+    limits: {
+      minDuration: 4,
+      maxDuration: 15,
+      images: 9,
+      videos: 3,
+      combinedVideoSeconds: 15,
+      audios: 3,
+      combinedAudioSeconds: 15,
+      totalMaterials: 12,
+    },
   },
   {
     id: 'luma-ray-3-2',
@@ -51,12 +60,8 @@ const MODELS = [
 ];
 
 function hasCredential(env, model) {
-  if (model.provider === 'seedance2.ai') {
-    return Boolean(env.SEEDANCE2_API_KEY);
-  }
-  if (model.provider === 'luma') {
-    return Boolean(env.LUMA_AGENTS_API_KEY || env.LUMA_API_KEY);
-  }
+  if (model.provider === 'seedance2.ai') return Boolean(env.SEEDANCE2_API_KEY);
+  if (model.provider === 'luma') return Boolean(env.LUMA_AGENTS_API_KEY || env.LUMA_API_KEY);
   return Boolean(env[model.credential]);
 }
 
