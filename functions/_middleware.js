@@ -1,5 +1,5 @@
 const ALLOWED_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-const ALLOWED_HEADERS = 'Content-Type,Authorization,Idempotency-Key,X-Beta-Code';
+const ALLOWED_HEADERS = 'Content-Type,Authorization,Idempotency-Key,X-Beta-Code,X-Admin-Wallet-Key';
 
 export async function onRequest(context) {
   const origin = context.request.headers.get('Origin');
@@ -40,7 +40,7 @@ export async function onRequest(context) {
       .on('body', {
         element(element) {
           element.append(
-            '<script src="/assets/version-sync.js?v=20260714-transparent"></script><script src="/assets/logo-pass.js?v=20260714-transparent"></script><script src="/assets/live-beta.js?v=20260714-transparent"></script><script src="/assets/seedance-live.js?v=20260714-transparent"></script><script src="/assets/seedance-safety.js?v=20260714-transparent"></script>',
+            '<script src="/assets/version-sync.js?v=20260714-wallet"></script><script src="/assets/logo-pass.js?v=20260714-wallet"></script><script src="/assets/live-beta.js?v=20260714-wallet"></script><script src="/assets/seedance-live.js?v=20260714-wallet"></script><script src="/assets/seedance-safety.js?v=20260714-wallet"></script><script src="/assets/wallet.js?v=20260714-wallet"></script>',
             { html: true },
           );
         },
