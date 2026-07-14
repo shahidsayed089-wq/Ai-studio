@@ -1,21 +1,33 @@
 (() => {
   const MODEL_NAME = 'Seedance 2.0';
   const API_ROOT = '/api/seedance';
+  const MAX = { image: 9, video: 3, audio: 3, total: 12, videoSeconds: 15, audioSeconds: 15 };
   const MODELS = {
     'seedance-2-0': {
       label: 'Seedance 2.0 Standard',
       resolutions: ['480p', '720p', '1080p', '4k'],
-      rates: { '480p': 6, '720p': 12, '1080p': 30, '4k': 70 },
+      rates: {
+        '480p': { plain: 6, video: 4 },
+        '720p': { plain: 12, video: 8 },
+        '1080p': { plain: 30, video: 20 },
+        '4k': { plain: 70, video: 40 },
+      },
     },
     'seedance-2-0-fast': {
       label: 'Seedance 2.0 Fast',
       resolutions: ['480p', '720p'],
-      rates: { '480p': 5, '720p': 10 },
+      rates: {
+        '480p': { plain: 5, video: 3 },
+        '720p': { plain: 10, video: 6 },
+      },
     },
     'seedance-2-0-mini': {
       label: 'Seedance 2.0 Mini',
       resolutions: ['480p', '720p'],
-      rates: { '480p': 3, '720p': 6 },
+      rates: {
+        '480p': { plain: 3, video: 2 },
+        '720p': { plain: 6, video: 4 },
+      },
     },
   };
 
@@ -29,28 +41,30 @@
     .seedance-beta.show{display:block}.seedance-beta label{display:block;color:#b9c8c5;font-size:11px;margin-bottom:7px}.seedance-beta input{width:100%;height:41px;border:1px solid var(--line2);border-radius:9px;background:#0d1112;color:#fff;padding:0 12px;outline:none}.seedance-beta input:focus{border-color:var(--good);box-shadow:0 0 0 3px rgba(95,245,181,.09)}
     .seedance-hint{margin-top:7px;color:#7f908d;font-size:10px;line-height:1.45}.seedance-note{display:none;margin:10px 0 0;color:#93a6a2;font-size:10px;line-height:1.5}.seedance-note.show{display:block}.seedance-note b{color:var(--good)}
     .controls.seedance-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .seedance-upload{cursor:pointer;transition:.2s}.seedance-upload:hover{border-color:var(--cyan)!important;background:rgba(8,240,227,.04)!important}.seedance-upload.busy{pointer-events:none;opacity:.65}
-    .seedance-upload strong{display:block;color:#ecfffc;font-size:14px}.seedance-upload small{display:block;margin-top:5px;color:#82928f}.seedance-upload input{display:none}
-    .seedance-previews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:11px}.seedance-preview{position:relative;border:1px solid var(--line2);border-radius:9px;overflow:hidden;background:#090c0d;min-height:88px}.seedance-preview img{display:block;width:100%;height:108px;object-fit:cover}.seedance-preview span{display:block;padding:7px 8px;color:#aab7b4;font-size:9px}.seedance-preview button{position:absolute;top:6px;right:6px;width:27px;height:27px;border:1px solid rgba(255,255,255,.3);border-radius:50%;background:rgba(0,0,0,.72);color:#fff}
+    .seedance-media{cursor:default!important;padding:14px!important;text-align:left!important}
+    .seedance-media-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.seedance-media-head strong{font-size:14px;color:#effffc}.seedance-media-head small{color:#7f918d;font-size:9px;text-align:right;line-height:1.45}
+    .seedance-adds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.seedance-add{height:42px;border:1px solid var(--line2);border-radius:9px;background:#0b1011;color:#dffefa;font-size:11px;font-weight:800}.seedance-add:hover{border-color:var(--cyan);background:rgba(8,240,227,.05)}.seedance-add:disabled{opacity:.45;cursor:not-allowed}
+    .seedance-counters{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.seedance-counter{padding:5px 8px;border:1px solid var(--line2);border-radius:99px;color:#91a39f;font-size:9px}.seedance-counter b{color:#e7faf7}
+    .seedance-previews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:11px}.seedance-preview{position:relative;border:1px solid var(--line2);border-radius:9px;overflow:hidden;background:#090c0d;min-height:96px}.seedance-preview img{display:block;width:100%;height:108px;object-fit:cover}.seedance-preview .media-placeholder{height:78px;display:flex;align-items:center;justify-content:center;font-size:28px;background:linear-gradient(135deg,#0c1516,#112328)}.seedance-preview span{display:block;padding:7px 8px;color:#aab7b4;font-size:9px;line-height:1.35}.seedance-preview button{position:absolute;top:6px;right:6px;width:27px;height:27px;border:1px solid rgba(255,255,255,.3);border-radius:50%;background:rgba(0,0,0,.72);color:#fff}.seedance-preview code{color:var(--cyan);font-size:9px}
     .seedance-output{display:none;margin-top:16px;border:1px solid rgba(8,240,227,.28);border-radius:12px;overflow:hidden;background:#050707}.seedance-output.show{display:block}.seedance-output video{display:block;width:100%;max-height:430px;background:#000}.seedance-output-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 12px}.seedance-output-actions span{font-size:11px;color:var(--good);font-weight:800}.seedance-output-actions a{color:#041310;background:var(--cyan);border-radius:8px;padding:8px 12px;text-decoration:none;font-size:11px;font-weight:900}.seedance-expiry{padding:0 12px 11px;color:#80908d;font-size:10px}
-    @media(max-width:620px){.controls.seedance-controls{grid-template-columns:1fr 1fr}.seedance-beta{margin-top:12px}.seedance-output video{max-height:54vh}.seedance-preview img{height:92px}}
+    @media(max-width:620px){.controls.seedance-controls{grid-template-columns:1fr 1fr}.seedance-adds{grid-template-columns:1fr}.seedance-previews{grid-template-columns:1fr 1fr}.seedance-preview img{height:92px}}
   `;
   document.head.appendChild(style);
 
   const card = [...document.querySelectorAll('.model-card')].find(item => item.dataset.name === MODEL_NAME);
   if (!card) return;
   card.classList.add('seedance-live-card');
-  card.dataset.tags = `${card.dataset.tags || ''} live`.trim();
+  card.dataset.tags = `${card.dataset.tags || ''} live multimodal`.trim();
   const badge = card.querySelector('.card-title small');
   if (badge) { badge.className = 'seedance-key-pill'; badge.textContent = 'CHECKING'; }
   const artLabel = card.querySelector('.art-label');
-  if (artLabel) artLabel.textContent = 'REAL API';
+  if (artLabel) artLabel.textContent = 'MULTIMODAL API';
   const company = card.querySelector('.company');
-  if (company) company.textContent = 'Seedance2.ai API · Standard / Fast / Mini';
+  if (company) company.textContent = 'Seedance2.ai API · Image / Video / Audio';
   const tags = card.querySelector('.tags');
-  if (tags) tags.innerHTML = '<span>Text to video</span><span>Image to video</span><span>4–15 sec</span>';
+  if (tags) tags.innerHTML = '<span>9 images</span><span>3 videos</span><span>3 audios</span>';
   const foot = card.querySelector('.card-foot');
-  if (foot) foot.innerHTML = '<span>Full live controls</span><span class="credits-pill">15–1050 credits</span>';
+  if (foot) foot.innerHTML = '<span>12 materials total</span><span class="credits-pill">4–15 sec</span>';
 
   const drawer = document.getElementById('drawer');
   const backdrop = document.getElementById('backdrop');
@@ -73,6 +87,8 @@
   if (!drawer || !generateBtn || !promptInput || !controls || !ratioSelect || !durationSelect || !qualitySelect || !upload) return;
 
   controls.classList.add('seedance-controls');
+  const existingModelField = document.getElementById('seedanceModel')?.closest('.field');
+  existingModelField?.remove();
   const modelField = document.createElement('div');
   modelField.className = 'field seedance-model-field';
   modelField.innerHTML = '<label>Model</label><select id="seedanceModel"></select>';
@@ -86,6 +102,7 @@
   durationSelect.disabled = false;
 
   const generateRow = document.querySelector('.generate-row');
+  document.querySelectorAll('.seedance-beta,.seedance-note,.seedance-output').forEach(node => node.remove());
   const beta = document.createElement('div');
   beta.className = 'seedance-beta';
   beta.innerHTML = '<label for="seedanceBetaCode">Private launch code · NOT your API key</label><input id="seedanceBetaCode" type="password" autocomplete="off" placeholder="Enter a short launch code"><div class="seedance-hint">The provider API key remains only in Cloudflare as <code>SEEDANCE2_API_KEY</code>.</div>';
@@ -96,27 +113,38 @@
 
   const note = document.createElement('p');
   note.className = 'seedance-note';
-  note.innerHTML = '<b>Live engine:</b> choose Standard, Fast, or Mini; generate 4–15 seconds; add one image for a first frame or two for first and last frames.';
+  note.innerHTML = '<b>Reference mode:</b> up to 9 images, 3 MP4 videos (15s combined), and 3 MP3 audios (15s combined), maximum 12 files. Use tags such as @image1, @video1 and @audio1 in your prompt.';
   generateRow?.after(note);
 
   const output = document.createElement('div');
   output.className = 'seedance-output';
   output.innerHTML = '<video controls playsinline></video><div class="seedance-output-actions"><span>REAL SEEDANCE RENDER</span><a target="_blank" rel="noopener">Open video</a></div><div class="seedance-expiry"></div>';
   progressBox?.after(output);
-  const video = output.querySelector('video');
-  const link = output.querySelector('a');
+  const outputVideo = output.querySelector('video');
+  const outputLink = output.querySelector('a');
   const expiry = output.querySelector('.seedance-expiry');
 
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.accept = 'image/jpeg,image/png,image/webp,image/gif';
-  fileInput.multiple = true;
-  upload.classList.add('seedance-upload');
-  upload.innerHTML = '<strong>＋ Add first / last frame images</strong><small>JPG, PNG, WEBP or GIF · up to 2 images · 12 MB each</small><div class="seedance-previews"></div>';
-  upload.appendChild(fileInput);
+  upload.className = `${upload.className} seedance-media`;
+  upload.innerHTML = `
+    <div class="seedance-media-head"><strong>Multimodal references</strong><small>MP4 video · MP3 audio<br>R2 secured uploads</small></div>
+    <div class="seedance-adds">
+      <button type="button" class="seedance-add" data-kind="image">＋ Add Image</button>
+      <button type="button" class="seedance-add" data-kind="video">＋ Add Video</button>
+      <button type="button" class="seedance-add" data-kind="audio">＋ Add Audio</button>
+    </div>
+    <div class="seedance-counters"></div>
+    <div class="seedance-previews"></div>
+  `;
+  const counters = upload.querySelector('.seedance-counters');
   const previews = upload.querySelector('.seedance-previews');
-  const uploadedImages = [];
+  const inputs = {
+    image: Object.assign(document.createElement('input'), { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', multiple: true }),
+    video: Object.assign(document.createElement('input'), { type: 'file', accept: 'video/mp4', multiple: true }),
+    audio: Object.assign(document.createElement('input'), { type: 'file', accept: 'audio/mpeg,.mp3', multiple: true }),
+  };
+  Object.values(inputs).forEach(input => { input.hidden = true; upload.appendChild(input); });
 
+  const assets = [];
   const previousGenerate = generateBtn.onclick;
 
   function isSelected() {
@@ -133,8 +161,25 @@
     if (progressBar) progressBar.style.width = `${percent}%`;
   }
 
+  function byKind(kind) {
+    return assets.filter(asset => asset.kind === kind);
+  }
+
+  function durationTotal(kind) {
+    return byKind(kind).reduce((sum, asset) => sum + Number(asset.duration || 0), 0);
+  }
+
   function currentModel() {
     return MODELS[modelSelect.value] || MODELS['seedance-2-0'];
+  }
+
+  function modeName() {
+    const images = byKind('image').length;
+    const videos = byKind('video').length;
+    const audios = byKind('audio').length;
+    if (!assets.length) return 'text-to-video';
+    if (!videos && !audios && images <= 2) return 'image-to-video';
+    return 'reference-to-video';
   }
 
   function syncResolutions() {
@@ -148,79 +193,129 @@
 
   function estimateCredits() {
     const model = currentModel();
-    const duration = Number(durationSelect.value || 5);
     const resolution = qualitySelect.value.toLowerCase();
-    return (model.rates[resolution] || 0) * duration;
+    const outputSeconds = Number(durationSelect.value || 5);
+    const videoSeconds = durationTotal('video');
+    const rate = model.rates[resolution] || { plain: 0, video: 0 };
+    return Math.ceil((videoSeconds ? rate.video : rate.plain) * (outputSeconds + videoSeconds));
   }
 
   function updateEstimate() {
     if (!isSelected()) return;
-    const mode = uploadedImages.length ? 'image-to-video' : 'text-to-video';
-    if (costText) costText.textContent = `${estimateCredits()} provider credits · ${durationSelect.value}s · ${qualitySelect.value} · ${mode}`;
+    const videoSeconds = durationTotal('video');
+    const audioSeconds = durationTotal('audio');
+    if (costText) costText.textContent = `${estimateCredits()} est. credits · ${durationSelect.value}s · ${qualitySelect.value} · ${modeName()}${videoSeconds ? ` · ${videoSeconds.toFixed(1)}s video refs` : ''}${audioSeconds ? ` · ${audioSeconds.toFixed(1)}s audio refs` : ''}`;
+  }
+
+  function renderCounters() {
+    counters.innerHTML = `
+      <span class="seedance-counter"><b>${byKind('image').length}</b>/9 images</span>
+      <span class="seedance-counter"><b>${byKind('video').length}</b>/3 videos · ${durationTotal('video').toFixed(1)}/15s</span>
+      <span class="seedance-counter"><b>${byKind('audio').length}</b>/3 audios · ${durationTotal('audio').toFixed(1)}/15s</span>
+      <span class="seedance-counter"><b>${assets.length}</b>/12 total</span>
+    `;
+    upload.querySelector('[data-kind="image"]').disabled = byKind('image').length >= MAX.image || assets.length >= MAX.total;
+    upload.querySelector('[data-kind="video"]').disabled = byKind('video').length >= MAX.video || assets.length >= MAX.total || durationTotal('video') >= MAX.videoSeconds;
+    upload.querySelector('[data-kind="audio"]').disabled = byKind('audio').length >= MAX.audio || assets.length >= MAX.total || durationTotal('audio') >= MAX.audioSeconds;
+  }
+
+  function tagFor(asset) {
+    return `@${asset.kind}${byKind(asset.kind).indexOf(asset) + 1}`;
   }
 
   function renderPreviews() {
     previews.innerHTML = '';
-    uploadedImages.forEach((asset, index) => {
+    assets.forEach(asset => {
       const item = document.createElement('div');
       item.className = 'seedance-preview';
-      item.innerHTML = `<img src="${asset.url}" alt="${index === 0 ? 'First frame' : 'Last frame'}"><button type="button" aria-label="Remove image">×</button><span>${index === 0 ? 'FIRST FRAME' : 'LAST FRAME'} · ${asset.filename}</span>`;
-      item.querySelector('button').onclick = event => {
-        event.stopPropagation();
-        uploadedImages.splice(index, 1);
+      const visual = asset.kind === 'image'
+        ? `<img src="${asset.url}" alt="Reference image">`
+        : `<div class="media-placeholder">${asset.kind === 'video' ? '🎞️' : '🎵'}</div>`;
+      item.innerHTML = `${visual}<button type="button" aria-label="Remove reference">×</button><span><code>${tagFor(asset)}</code> · ${asset.filename}${asset.duration ? ` · ${asset.duration.toFixed(1)}s` : ''}</span>`;
+      item.querySelector('button').onclick = () => {
+        const index = assets.indexOf(asset);
+        if (index >= 0) assets.splice(index, 1);
         renderPreviews();
+        renderCounters();
         updateEstimate();
       };
       previews.appendChild(item);
     });
+    renderCounters();
   }
 
-  async function uploadImage(file) {
+  function readDuration(file) {
+    if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) return Promise.resolve(0);
+    return new Promise((resolve, reject) => {
+      const media = document.createElement(file.type.startsWith('video/') ? 'video' : 'audio');
+      const url = URL.createObjectURL(file);
+      media.preload = 'metadata';
+      media.onloadedmetadata = () => {
+        const duration = Number(media.duration || 0);
+        URL.revokeObjectURL(url);
+        Number.isFinite(duration) && duration > 0 ? resolve(duration) : reject(new Error(`Could not read duration for ${file.name}.`));
+      };
+      media.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error(`Could not read ${file.name}. Use MP4 video or MP3 audio.`));
+      };
+      media.src = url;
+    });
+  }
+
+  async function uploadFile(file, kind, duration) {
     const form = new FormData();
-    form.append('image', file);
-    const response = await fetch('/api/uploads/image', {
+    form.append('file', file);
+    const response = await fetch('/api/uploads/media', {
       method: 'POST',
       headers: { 'x-beta-code': betaInput.value.trim() },
       body: form,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || payload.error || `Upload failed (${response.status})`);
-    return payload.asset;
+    return { ...payload.asset, kind, duration };
   }
 
-  upload.addEventListener('click', event => {
-    if (!isSelected() || event.target.closest('button')) return;
-    fileInput.click();
-  });
-
-  fileInput.addEventListener('change', async () => {
-    const room = 2 - uploadedImages.length;
-    const files = [...fileInput.files].slice(0, room);
-    fileInput.value = '';
+  async function handleFiles(kind, fileList) {
+    const availableCount = Math.min(MAX[kind] - byKind(kind).length, MAX.total - assets.length);
+    const files = [...fileList].slice(0, availableCount);
     if (!files.length) return;
-    upload.classList.add('busy');
-    setProgress(`Uploading ${files.length} reference image${files.length > 1 ? 's' : ''}…`, 3);
+    setProgress(`Preparing ${files.length} ${kind} reference${files.length > 1 ? 's' : ''}…`, 2);
     try {
       for (const file of files) {
-        const asset = await uploadImage(file);
-        uploadedImages.push(asset);
+        const duration = await readDuration(file);
+        if (kind === 'video' && durationTotal('video') + duration > MAX.videoSeconds) throw new Error('Reference videos can total at most 15 seconds.');
+        if (kind === 'audio' && durationTotal('audio') + duration > MAX.audioSeconds) throw new Error('Reference audios can total at most 15 seconds.');
+        setProgress(`Uploading ${file.name} securely to R2…`, 3);
+        assets.push(await uploadFile(file, kind, duration));
         renderPreviews();
       }
-      setProgress('Reference image ready for Seedance.', 5);
+      setProgress(`${kind[0].toUpperCase() + kind.slice(1)} references ready.`, 5);
       updateEstimate();
     } catch (error) {
-      setProgress(error instanceof Error ? error.message : 'Image upload failed.', 0, true);
-    } finally {
-      upload.classList.remove('busy');
+      setProgress(error instanceof Error ? error.message : 'Reference upload failed.', 0, true);
     }
+  }
+
+  upload.querySelectorAll('.seedance-add').forEach(button => {
+    const kind = button.dataset.kind;
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      inputs[kind].click();
+    });
+    inputs[kind].addEventListener('change', () => {
+      handleFiles(kind, inputs[kind].files);
+      inputs[kind].value = '';
+    });
   });
+  renderCounters();
 
   function syncMode() {
     const live = isSelected();
     beta.classList.toggle('show', live);
     note.classList.toggle('show', live);
     modelField.style.display = live ? '' : 'none';
-    upload.style.display = live ? '' : '';
+    upload.style.display = '';
     if (!live) output.classList.remove('show');
     durationSelect.disabled = false;
     qualitySelect.disabled = false;
@@ -236,7 +331,7 @@
     setTimeout(() => {
       if (drawerModel) drawerModel.textContent = MODEL_NAME;
       if (bannerModel) bannerModel.textContent = MODEL_NAME;
-      if (bannerCopy) bannerCopy.textContent = 'Real text-to-video and image-to-video through Seedance2.ai API';
+      if (bannerCopy) bannerCopy.textContent = 'Real multimodal generation with image, video and audio references';
       syncMode();
     }, 0);
   });
@@ -287,6 +382,10 @@
       setProgress('Write a prompt before generating.', 0, true);
       return;
     }
+    if (byKind('audio').length && !byKind('image').length && !byKind('video').length) {
+      setProgress('Audio references need at least one image or video reference.', 0, true);
+      return;
+    }
 
     const code = betaInput.value.trim();
     output.classList.remove('show');
@@ -305,7 +404,9 @@
           duration: Number(durationSelect.value || 5),
           resolution: qualitySelect.value || '720p',
           generateAudio: true,
-          imageUrls: uploadedImages.map(asset => asset.url),
+          imageUrls: byKind('image').map(asset => asset.url),
+          videoUrls: byKind('video').map(asset => asset.url),
+          audioUrls: byKind('audio').map(asset => asset.url),
         }),
       });
       if (!response.ok) throw new Error(await readError(response));
@@ -313,10 +414,10 @@
       const generation = payload.generation;
       if (!generation?.id) throw new Error('Seedance did not return a task ID.');
 
-      setProgress(`Task accepted · ${generation.credits ?? estimateCredits()} credits reserved`, 14);
+      setProgress(`Task accepted · ${generation.credits ?? estimateCredits()} credits reserved · ${generation.mode}`, 14);
       const completed = await poll(generation.id, code);
-      video.src = completed.videoUrl;
-      link.href = completed.videoUrl;
+      outputVideo.src = completed.videoUrl;
+      outputLink.href = completed.videoUrl;
       expiry.textContent = completed.videoExpiresAt
         ? `Provider link expires ${new Date(completed.videoExpiresAt).toLocaleString()}. Save the output before then.`
         : 'Save the completed output because provider links may expire.';
