@@ -16,9 +16,7 @@ function betaCode(request) {
 }
 
 function seedanceApiKey(env) {
-  const preferred = typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
-  const legacy = typeof env['.env file'] === 'string' ? env['.env file'].trim() : '';
-  return preferred || legacy;
+  return typeof env.SEEDANCE2_API_KEY === 'string' ? env.SEEDANCE2_API_KEY.trim() : '';
 }
 
 function errorMessage(payload, fallback) {
