@@ -9,7 +9,7 @@ export async function onRequestGet({ env, params }) {
   if (!env.MEDIA) return notFound();
 
   const key = typeof params.key === 'string' ? params.key : '';
-  if (!/^[a-f0-9-]{36}\.(jpg|png|webp|gif)$/i.test(key)) return notFound();
+  if (!/^[a-f0-9-]{36}\.(jpg|png|webp|gif|mp4|mp3)$/i.test(key)) return notFound();
 
   const object = await env.MEDIA.get(key);
   if (!object) return notFound();
@@ -20,6 +20,7 @@ export async function onRequestGet({ env, params }) {
   headers.set('cache-control', 'public, max-age=86400, immutable');
   headers.set('x-content-type-options', 'nosniff');
   headers.set('content-disposition', 'inline');
+  headers.set('accept-ranges', 'bytes');
 
   return new Response(object.body, { headers });
 }
