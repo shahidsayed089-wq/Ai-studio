@@ -52,7 +52,7 @@ const MODELS = [
 
 function hasCredential(env, model) {
   if (model.provider === 'seedance2.ai') {
-    return Boolean(env.SEEDANCE2_API_KEY || env['.env file']);
+    return Boolean(env.SEEDANCE2_API_KEY);
   }
   if (model.provider === 'luma') {
     return Boolean(env.LUMA_AGENTS_API_KEY || env.LUMA_API_KEY);
