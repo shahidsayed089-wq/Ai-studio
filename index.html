@@ -3,101 +3,129 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#080706">
-  <meta name="description" content="Shazan AI Studio is an AI-native creative suite powered by Yagna Engine for cinematic image and video creation.">
-  <title>Shazan AI Studio | Yagna Engine</title>
-  <link rel="stylesheet" href="/explore.css?v=15">
+  <meta name="theme-color" content="#09090b">
+  <meta name="description" content="Shazan AI Studio is a visual AI creation workspace for image, video, characters, audio and cinematic projects.">
+  <title>Shazan AI Studio</title>
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link rel="stylesheet" href="/studio-home.css?v=20260716-dashboard">
 </head>
 <body>
-<div class="page">
-  <header class="topbar">
-    <a class="brand" href="/"><span class="brand-mark"></span><span><strong>Shazan AI Studio</strong><small>Yagna Engine</small></span></a>
-    <nav class="nav" aria-label="Main navigation">
-      <a class="active" href="/">Explore</a>
-      <a href="/create.html?kind=image">Image</a>
-      <a href="/create.html?kind=video">Video</a>
-      <a href="#engines">Engines</a>
-      <a href="#projects">Projects</a>
-      <a href="#presets">Presets</a>
-      <a href="#forge">Yagna Forge</a>
-    </nav>
-    <div class="actions"><div class="status"><i></i><span id="connectionText">Explore mode</span></div><a class="create-btn" href="/create.html">Create</a><div class="avatar">SK</div></div>
-  </header>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-mark">S</span><span class="brand-copy"><b>Shazan AI</b><small>Creative Studio</small></span></a>
 
-  <main class="main">
-    <div class="hero-top">
-      <h1>Every creative engine. <span>One cinematic universe.</span></h1>
-      <p>Explore original visual worlds, connected generation engines and production-ready creative tools before entering the Yagna workspace.</p>
+    <div class="nav-group">
+      <div class="nav-title">Create</div>
+      <a class="nav-link active" href="/"><span class="nav-icon">⌂</span>Home</a>
+      <a class="nav-link" href="/create.html?kind=video"><span class="nav-icon">▶</span>Video</a>
+      <a class="nav-link" href="/create.html?kind=image"><span class="nav-icon">▧</span>Image</a>
+      <a class="nav-link" href="/create.html?kind=image"><span class="nav-icon">◎</span>Character</a>
+      <a class="nav-link" href="/create.html?kind=video"><span class="nav-icon">✦</span>Director</a>
+      <a class="nav-link" href="/create.html?kind=video"><span class="nav-icon">♪</span>Audio</a>
     </div>
 
-    <section class="hero-grid" aria-label="Featured creations">
-      <article class="feature">
-        <div class="scene scene-city" id="heroScene"></div>
-        <div class="feature-copy">
-          <span class="eyebrow" id="heroEyebrow"><i></i>YAGNA ORIGINAL · MOTION</span>
-          <h2 id="heroTitle">Build worlds that feel filmed, not generated.</h2>
-          <p id="heroCopy">Direct cinematic motion, atmosphere and performance through one connected creative system.</p>
-          <div class="feature-actions"><a class="primary" id="heroAction" href="/create.html?kind=video">Create a video</a><button class="ghost" type="button" data-next-hero>Next story →</button></div>
+    <div class="nav-group">
+      <div class="nav-title">Workspace</div>
+      <a class="nav-link" href="/create.html#view-jobs"><span class="nav-icon">▣</span>My creations</a>
+      <a class="nav-link" href="/create.html#view-jobs"><span class="nav-icon">◇</span>Projects</a>
+      <a class="nav-link" href="/create.html"><span class="nav-icon">＋</span>Media</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-title">AI tools</div>
+      <a class="nav-link" href="/create.html?kind=video"><span class="nav-icon">↗</span>Image to video</a>
+      <a class="nav-link" href="/create.html?kind=video"><span class="nav-icon">◉</span>Lip sync</a>
+      <a class="nav-link" href="/create.html?kind=image"><span class="nav-icon">⌁</span>Upscale</a>
+      <a class="nav-link" href="/create.html?kind=video"><span class="nav-icon">✎</span>Edit video</a>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="wallet-card"><span>Available credits</span><b id="sideCredits">…</b><a href="/owner.html">Owner wallet →</a></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="mobile-head"><span class="brand-mark">S</span><b>Shazan AI</b></div>
+      <div class="search">⌕&nbsp;&nbsp; Search models, tools and projects</div>
+      <div class="top-actions">
+        <div class="live-status"><i></i><span id="homeStatusText">Checking AI</span></div>
+        <div class="credit-pill" id="homeCredits">Credits</div>
+        <div class="avatar">SK</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <section class="welcome">
+        <div><h1>What would you like to create?</h1><p>Generate videos, images and cinematic projects from one visual workspace.</p></div>
+        <div class="welcome-meta"><span class="badge">Seedance 2.0 connected</span><span class="badge">Private studio</span></div>
+      </section>
+
+      <form class="composer" id="homeComposer">
+        <div class="composer-tabs">
+          <button class="composer-tab active" type="button" data-mode="video">Video</button>
+          <button class="composer-tab" type="button" data-mode="image">Image</button>
+          <button class="composer-tab" type="button" data-mode="character">Character</button>
+          <button class="composer-tab" type="button" data-mode="director">Director</button>
+          <button class="composer-tab" type="button" data-mode="audio">Audio</button>
         </div>
-      </article>
-      <div class="hero-side">
-        <a class="mini-feature" href="/create.html?kind=image"><div class="scene scene-portrait"></div><div class="mini-copy"><b>Character Forge</b><span>Identity-led cinematic stills</span></div></a>
-        <a class="mini-feature" href="#presets"><div class="scene scene-orbit"></div><div class="mini-copy"><b>Viral Presets</b><span>Big-screen visual effects in one click</span></div></a>
-      </div>
-    </section>
+        <div class="composer-body">
+          <div class="prompt-box">
+            <textarea id="homePrompt" maxlength="6000" placeholder="Describe the scene, camera movement, lighting, performance and atmosphere…"></textarea>
+            <div class="prompt-tools"><button class="upload-mini" type="button" onclick="location.href='/create.html?kind=video'">＋ Add reference</button><span class="draft-count" id="homePromptCount">0/6000</span></div>
+          </div>
+          <div class="composer-controls">
+            <div class="control model-control"><label>Model</label><select id="homeModel"><option value="seedance-2-0">Seedance 2.0</option><option value="seedance-2-0-fast">Seedance 2.0 Fast</option><option value="seedance-2-0-mini">Seedance 2.0 Mini</option></select></div>
+            <div class="control"><label>Frame</label><select id="homeAspect"><option value="9:16">9:16</option><option value="16:9">16:9</option><option value="1:1">1:1</option><option value="21:9">21:9</option></select></div>
+            <div class="control" id="homeDurationWrap"><label>Duration</label><select id="homeDuration"><option value="5">5 sec</option><option value="10">10 sec</option><option value="15">15 sec</option></select></div>
+            <div class="control"><label>Quality</label><select><option>720p</option><option>1080p</option><option>4K</option></select></div>
+            <button class="generate" id="homeGenerate" type="submit">Generate video</button>
+          </div>
+        </div>
+      </form>
 
-    <section class="launchpad" aria-label="Start creating">
-      <button class="launch-tile" type="button" data-create-kind="video"><span class="launch-icon">▶</span><span><b>Create video</b><small>Motion and cinematic direction</small></span></button>
-      <button class="launch-tile" type="button" data-create-kind="image"><span class="launch-icon">▧</span><span><b>Create image</b><small>Characters, campaigns and worlds</small></span></button>
-      <a class="launch-tile" href="/create.html?kind=video"><span class="launch-icon">⌁</span><span><b>Reference motion</b><small>Continue from an existing frame</small></span></a>
-      <a class="launch-tile" href="/create.html?kind=image"><span class="launch-icon">✦</span><span><b>Visual polish</b><small>Refine lighting and production design</small></span></a>
-      <a class="launch-tile" href="#presets"><span class="launch-icon">◇</span><span><b>Browse presets</b><small>Designed cinematic transformations</small></span></a>
-      <a class="launch-tile" href="#forge"><span class="launch-icon">⌘</span><span><b>Yagna Forge</b><small>Connected apps and creative tools</small></span></a>
-    </section>
+      <section class="section">
+        <div class="section-head"><div><h2>Start with a format</h2><p>Production-ready starting points, not decorative planets.</p></div><a href="/create.html">View all →</a></div>
+        <div class="mode-grid">
+          <a class="visual-card" href="/create.html?kind=video" data-open-mode="video"><img loading="lazy" src="https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=82" alt="Film production set"><span class="visual-chip">DIRECTOR</span><div class="visual-copy"><b>Short Film</b><span>Build cinematic scenes and sequences</span></div></a>
+          <a class="visual-card" href="/create.html?kind=video" data-open-mode="video"><img loading="lazy" src="https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=900&q=82" alt="Music performance"><span class="visual-chip">VIDEO</span><div class="visual-copy"><b>Music Video</b><span>Performance, rhythm and visual worlds</span></div></a>
+          <a class="visual-card" href="/create.html?kind=video" data-open-mode="video"><img loading="lazy" src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=82" alt="Product advertisement"><span class="visual-chip">COMMERCIAL</span><div class="visual-copy"><b>Product Ad</b><span>Polished product shots and motion</span></div></a>
+          <a class="visual-card" href="/create.html?kind=video" data-open-mode="video"><img loading="lazy" src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=82" alt="Camera and reference frame"><span class="visual-chip">REFERENCE</span><div class="visual-copy"><b>Image to Video</b><span>Animate a frame with controlled motion</span></div></a>
+          <a class="visual-card" href="/create.html?kind=image" data-open-mode="image"><img loading="lazy" src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=82" alt="Fashion character portrait"><span class="visual-chip">IMAGE</span><div class="visual-copy"><b>Character Design</b><span>Create faces, wardrobe and identity</span></div></a>
+          <a class="visual-card" href="/create.html?kind=video" data-open-mode="video"><img loading="lazy" src="https://images.unsplash.com/photo-1524250502761-1ac6f2e30d43?auto=format&fit=crop&w=900&q=82" alt="Social content creator"><span class="visual-chip">SOCIAL</span><div class="visual-copy"><b>UGC & Shorts</b><span>Fast social-first video concepts</span></div></a>
+        </div>
+      </section>
 
-    <section class="section" id="engines">
-      <div class="section-head"><div><h3>Connected creative engines</h3><p>Your live generation catalog, presented as a creative choice instead of a settings screen.</p></div><a href="/create.html">Open all engines →</a></div>
-      <div class="engine-rail" id="engineRail">
-        <a class="engine-card" href="/create.html?kind=video"><div class="engine-art"></div><div class="engine-info"><b>Yagna Motion Auto</b><p>Intelligent routing for cinematic motion and directed camera work.</p><div class="engine-meta"><span>Motion engine</span><strong>Open engine</strong></div></div></a>
-        <a class="engine-card" href="/create.html?kind=image"><div class="engine-art"></div><div class="engine-info"><b>Yagna Image Auto</b><p>Visual development, campaign stills and polished cinematic frames.</p><div class="engine-meta"><span>Image engine</span><strong>Open engine</strong></div></div></a>
-        <a class="engine-card" href="/create.html?kind=video"><div class="engine-art"></div><div class="engine-info"><b>Director Mode</b><p>Reference-aware scene continuation with controlled visual language.</p><div class="engine-meta"><span>Creative routing</span><strong>Open engine</strong></div></div></a>
-        <a class="engine-card" href="/create.html?kind=image"><div class="engine-art"></div><div class="engine-info"><b>Character Forge</b><p>Identity-led imagery for actors, avatars and campaign characters.</p><div class="engine-meta"><span>Visual identity</span><strong>Open engine</strong></div></div></a>
-      </div>
-    </section>
+      <section class="section">
+        <div class="section-head"><div><h2>Popular AI tools</h2><p>The jobs creators actually come here to do.</p></div><a href="/create.html">Open studio →</a></div>
+        <div class="tool-grid">
+          <a class="tool-card" href="/create.html?kind=video"><div class="tool-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=900&q=82" alt="Cinematic film frame"></div><div class="tool-body"><header><b>Text to Video</b><em>LIVE</em></header><p>Generate a cinematic video from a written direction using Seedance 2.0.</p></div></a>
+          <a class="tool-card" href="/create.html?kind=video"><div class="tool-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=82" alt="Visual reference landscape"></div><div class="tool-body"><header><b>Reference to Video</b><em>LIVE</em></header><p>Use images, video and audio references to guide the final generation.</p></div></a>
+          <a class="tool-card" href="/create.html?kind=image"><div class="tool-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=82" alt="Character portrait"></div><div class="tool-body"><header><b>Consistent Character</b><em>WORKSPACE</em></header><p>Develop repeatable character looks, wardrobe and visual identity.</p></div></a>
+          <a class="tool-card" href="/create.html?kind=video"><div class="tool-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=900&q=82" alt="Video editing workspace"></div><div class="tool-body"><header><b>Cinema Studio</b><em>WORKSPACE</em></header><p>Organize prompts, references and completed renders in one production flow.</p></div></a>
+        </div>
+      </section>
 
-    <section class="section" id="projects">
-      <div class="section-head"><div><h3>Explore the inside of every project</h3><p>Original concepts showing the visual language Yagna is built to direct.</p></div><a href="/create.html">Start your project →</a></div>
-      <div class="project-grid">
-        <a class="project" href="/create.html?kind=video"><div class="scene scene-city"></div><div class="project-copy"><b>Neon Monsoon</b><span>Cinematic action world · Motion</span></div></a>
-        <a class="project" href="/create.html?kind=image"><div class="scene scene-portrait"></div><div class="project-copy"><b>Emberborn</b><span>Character development · Still</span></div></a>
-        <a class="project" href="/create.html?kind=video"><div class="scene scene-desert"></div><div class="project-copy"><b>Last Sun</b><span>Desert epic · Motion</span></div></a>
-        <a class="project" href="/create.html?kind=image"><div class="scene scene-orbit"></div><div class="project-copy"><b>Orbital Presence</b><span>Science-fiction campaign · Still</span></div></a>
-        <a class="project" href="/create.html?kind=video"><div class="scene scene-city"></div><div class="project-copy"><b>Midnight Pursuit</b><span>Urban thriller · Motion</span></div></a>
-        <a class="project" href="/create.html?kind=image"><div class="scene scene-desert"></div><div class="project-copy"><b>Golden Exile</b><span>Editorial worldbuilding · Still</span></div></a>
-      </div>
-    </section>
+      <section class="section">
+        <div class="section-head"><div><h2>Models</h2><p>Connected now and planned provider routes.</p></div></div>
+        <div class="model-rail">
+          <a class="model-card" href="/create.html?kind=video"><span class="model-logo live">S2</span><span class="model-copy"><b>Seedance 2.0</b><span>Multimodal video generation</span><small>Connected</small></span></a>
+          <a class="model-card" href="/create.html?kind=video"><span class="model-logo">K3</span><span class="model-copy"><b>Kling 3.0</b><span>Video and reference control</span><small>Provider route required</small></span></a>
+          <a class="model-card" href="/create.html?kind=video"><span class="model-logo">V</span><span class="model-copy"><b>Veo</b><span>Video generation with audio</span><small>Provider route required</small></span></a>
+          <a class="model-card" href="/create.html?kind=image"><span class="model-logo">GI</span><span class="model-copy"><b>GPT Image</b><span>Image generation and editing</span><small>Provider route required</small></span></a>
+          <a class="model-card" href="/create.html?kind=image"><span class="model-logo">NB</span><span class="model-copy"><b>Nano Banana</b><span>Fast image creation</span><small>Provider route required</small></span></a>
+        </div>
+      </section>
 
-    <section class="section" id="presets">
-      <div class="section-head"><div><h3>Yagna cinematic presets</h3><p>Fast visual directions for effects, campaigns and social-first cinema.</p></div><a href="/create.html">Use a preset →</a></div>
-      <div class="preset-rail">
-        <a class="preset-card" href="/create.html?kind=video"><div class="scene scene-city"></div><div class="preset-copy"><b>Nightline Chase</b><span>Rain, speed and blue-hour tension</span></div></a>
-        <a class="preset-card" href="/create.html?kind=video"><div class="scene scene-desert"></div><div class="preset-copy"><b>Storm Giant</b><span>Scale, atmosphere and destruction</span></div></a>
-        <a class="preset-card" href="/create.html?kind=image"><div class="scene scene-portrait"></div><div class="preset-copy"><b>Red Carpet Flash</b><span>Luxury paparazzi editorial</span></div></a>
-        <a class="preset-card" href="/create.html?kind=video"><div class="scene scene-orbit"></div><div class="preset-copy"><b>Orbital Assembly</b><span>Mechanical transformation effect</span></div></a>
-        <a class="preset-card" href="/create.html?kind=image"><div class="scene scene-city"></div><div class="preset-copy"><b>Neon City</b><span>Future-noir campaign lighting</span></div></a>
-      </div>
-    </section>
+      <section class="section workspace-grid">
+        <div class="recent-panel"><div class="section-head"><div><h2>Your creations</h2><p>Completed renders will appear in the Render Vault.</p></div><a href="/create.html#view-jobs">Open vault →</a></div><div class="empty-workspace"><div><b>No renders on this browser yet</b>Start with a prompt above or open the full creation workspace.</div></div></div>
+        <div class="tips-panel"><div class="section-head"><div><h2>Fast workflow</h2><p>From idea to output.</p></div></div><div class="tip"><span class="tip-num">1</span><span><b>Choose a format</b><span>Video, image, character or director.</span></span></div><div class="tip"><span class="tip-num">2</span><span><b>Add references</b><span>Upload image, video or audio material.</span></span></div><div class="tip"><span class="tip-num">3</span><span><b>Generate and review</b><span>Track the real render in your vault.</span></span></div></div>
+      </section>
+    </div>
 
-    <section class="forge-band" id="forge">
-      <div><span class="eyebrow"><i></i>YAGNA FORGE</span><h3>One original interface over your entire creative stack.</h3><p id="forgeCopy">Connected tools for generation, reference media, analysis, marketing, 3D and production workflows, organized without exposing the machinery to your audience.</p></div>
-      <div class="forge-actions"><a class="primary" href="/create.html">Enter the studio</a><a class="ghost" href="/higgsfield-connect.html">Manage connection</a></div>
-    </section>
-
-    <footer class="footer"><span>© 2026 Shazan AI Studio · Yagna Engine</span><span>Original interface · Connected creative infrastructure</span></footer>
+    <nav class="mobile-dock"><a class="active" href="/"><span>⌂</span>Home</a><a href="/create.html?kind=video"><span>▶</span>Video</a><a href="/create.html?kind=image"><span>▧</span>Image</a><a href="/create.html#view-jobs"><span>▣</span>Vault</a><a href="/owner.html"><span>●</span>Credits</a></nav>
   </main>
-
-  <nav class="mobile-dock" aria-label="Mobile navigation"><a class="active" href="/"><span>⌂</span>Explore</a><a href="/create.html"><span>♨</span>Create</a><a href="#engines"><span>◇</span>Engines</a><a href="#forge"><span>✦</span>Forge</a><a href="/create.html#view-jobs"><span>▣</span>Vault</a></nav>
 </div>
-<script src="/explore.js?v=15" defer></script>
+<script src="/studio-home.js?v=20260716-dashboard" defer></script>
 </body>
 </html>
