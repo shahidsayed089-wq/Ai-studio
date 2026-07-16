@@ -1,82 +1,16 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const tabs = [...document.querySelectorAll('[data-mode]')];
-  let mode = 'video';
-
-  function setMode(next) {
-    mode = next;
-    tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.mode === next));
-    const prompt = $('homePrompt');
-    const generate = $('homeGenerate');
-    const model = $('homeModel');
-    const duration = $('homeDurationWrap');
-    const placeholders = {
-      video: 'Describe the scene, camera movement, lighting, performance and atmosphere…',
-      image: 'Describe the image, character, composition, lighting and visual style…',
-      character: 'Describe the character, face, wardrobe, personality and world…',
-      audio: 'Describe the voice, music, mood, tempo or sound design…',
-      director: 'Describe the story, scenes, pacing and final film you want to create…',
-    };
-    if (prompt) prompt.placeholder = placeholders[next] || placeholders.video;
-    if (generate) generate.textContent = next === 'video' ? 'Generate video' : next === 'image' ? 'Generate image' : `Open ${next}`;
-    if (duration) duration.hidden = next !== 'video';
-    if (model) {
-      model.innerHTML = '';
-      const options = next === 'video'
-        ? [['seedance-2-0','Seedance 2.0'],['seedance-2-0-fast','Seedance 2.0 Fast'],['seedance-2-0-mini','Seedance 2.0 Mini']]
-        : next === 'image'
-          ? [['image-auto','Image Studio'],['gpt-image-2','GPT Image 2'],['seedream','Seedream']]
-          : [[`${next}-studio`,`${next[0].toUpperCase()}${next.slice(1)} Studio`]];
-      options.forEach(([value,label]) => model.add(new Option(label,value)));
-    }
-  }
-
-  tabs.forEach(tab => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
-
-  const prompt = $('homePrompt');
-  prompt?.addEventListener('input', () => {
-    const counter = $('homePromptCount');
-    if (counter) counter.textContent = `${prompt.value.length}/6000`;
-  });
-
-  $('homeComposer')?.addEventListener('submit', event => {
-    event.preventDefault();
-    const text = prompt?.value.trim() || '';
-    if (text.length < 3) {
-      prompt?.focus();
-      return;
-    }
-    const draft = {
-      mode,
-      prompt: text,
-      model: $('homeModel')?.value || '',
-      aspectRatio: $('homeAspect')?.value || '9:16',
-      duration: Number($('homeDuration')?.value || 5),
-      savedAt: Date.now(),
-    };
-    localStorage.setItem('yagnaDraft', JSON.stringify(draft));
-    location.href = `/create.html?kind=${mode === 'image' ? 'image' : 'video'}&draft=1`;
-  });
-
-  document.querySelectorAll('[data-open-mode]').forEach(card => {
-    card.addEventListener('click', event => {
-      event.preventDefault();
-      const next = card.dataset.openMode || 'video';
-      localStorage.setItem('yagnaDraft', JSON.stringify({ mode: next, prompt: '', savedAt: Date.now() }));
-      location.href = `/create.html?kind=${next === 'image' ? 'image' : 'video'}&draft=1`;
-    });
-  });
 
   async function loadStatus() {
-    const statusText = $('homeStatusText');
+    const status = $('homeStatusText');
     try {
       const response = await fetch('/api/health', { cache: 'no-store' });
       const data = await response.json().catch(() => ({}));
-      const ready = Boolean(data.checks?.seedance2Api);
-      if (statusText) statusText.textContent = ready ? 'Seedance live' : 'Studio online';
+      const ready = Boolean(data.checks?.seedance2Api || data.ok);
+      if (status) status.textContent = ready ? 'Yagna online' : 'Studio ready';
       document.body.classList.toggle('provider-ready', ready);
     } catch {
-      if (statusText) statusText.textContent = 'Studio online';
+      if (status) status.textContent = 'Studio ready';
     }
   }
 
@@ -87,11 +21,51 @@
       if (!response.ok || !data.wallet) return;
       const balance = Number(data.wallet.balance || 0).toLocaleString();
       if ($('homeCredits')) $('homeCredits').textContent = `${balance} credits`;
-      if ($('sideCredits')) $('sideCredits').textContent = balance;
     } catch {}
   }
 
-  setMode('video');
+  function installHeroMotion() {
+    const hero = document.querySelector('.hero');
+    const panels = [...document.querySelectorAll('.mosaic-panel img')];
+    if (!hero || !panels.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let frame = 0;
+    hero.addEventListener('pointermove', event => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const box = hero.getBoundingClientRect();
+        const x = (event.clientX - box.left) / box.width - 0.5;
+        const y = (event.clientY - box.top) / box.height - 0.5;
+        panels.forEach((image, index) => {
+          const strength = 5 + (index % 3) * 2;
+          image.style.transform = `scale(1.06) translate(${x * strength}px, ${y * strength}px)`;
+        });
+      });
+    });
+
+    hero.addEventListener('pointerleave', () => {
+      panels.forEach(image => { image.style.transform = 'scale(1.03)'; });
+    });
+  }
+
+  function revealOnScroll() {
+    const items = [...document.querySelectorAll('.hub-card,.project-card,.monitor')];
+    if (!('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        entry.target.animate([
+          { opacity: 0, transform: 'translateY(24px)' },
+          { opacity: 1, transform: 'translateY(0)' },
+        ], { duration: 650, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12 });
+    items.forEach(item => observer.observe(item));
+  }
+
   loadStatus();
   loadWallet();
+  installHeroMotion();
+  revealOnScroll();
 })();
