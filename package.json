@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "vinext build",
     "preview": "npm run build && wrangler pages dev dist/client",
-    "deploy": "npm run build && wrangler pages deploy dist/client --project-name ai-studio-1n1",
+    "deploy": "npm run build && wrangler pages deploy",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {

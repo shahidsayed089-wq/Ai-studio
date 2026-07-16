@@ -23,6 +23,7 @@ npm run build
 ## Deploy to Cloudflare Pages
 
 The production build generates the static website, including `index.html`, in `dist/client`.
+The checked-in `wrangler.jsonc` pins that output directory to the `ai-studio-1n1` Pages project.
 
 ```bash
 npm run deploy
