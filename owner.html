@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>AI Studio Owner Wallet</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#05090a;color:#eefcf9}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0,#113131 0,#071011 38%,#040707 100%);padding:20px}
+    main{width:min(560px,100%);margin:0 auto;padding-top:24px}.brand{font-size:14px;color:#59f5e7;font-weight:900;letter-spacing:.08em}.card{margin-top:18px;border:1px solid rgba(89,245,231,.26);border-radius:20px;background:rgba(8,14,15,.94);padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.48)}
+    h1{margin:0;font-size:30px;line-height:1.05}p{color:#91a5a1;line-height:1.55;font-size:14px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}.stat{border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:14px;background:#0c1314}.stat span{font-size:10px;color:#71827f;text-transform:uppercase}.stat b{display:block;margin-top:7px;font-size:26px;color:#59f5e7}.stat.reserved b{color:#ffda83}
+    label{display:block;margin:13px 0 6px;font-size:11px;font-weight:800;color:#dce9e7}input{width:100%;height:48px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#060a0b;color:#fff;padding:0 13px;font-size:14px;outline:none}button{width:100%;height:50px;margin-top:16px;border:0;border-radius:12px;background:#21e7d8;color:#021312;font-weight:950;font-size:14px}button:disabled{opacity:.55}.status{margin-top:14px;padding:12px;border-radius:10px;background:#0a1112;color:#95a8a4;font-size:12px;line-height:1.5}.status.good{color:#79f6b8}.status.error{color:#ff9aa0}.wallet-id{margin-top:12px;padding:10px;border-radius:10px;background:#030505;color:#849693;font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}.back{display:block;margin-top:16px;text-align:center;color:#75e8df;text-decoration:none;font-size:13px}
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">SHAZAN AI STUDIO</div>
+  <section class="card">
+    <h1>Owner Wallet Top-Up</h1>
+    <p>Add private test credits to this browser's wallet. The admin key is sent only to your server and is not stored by this page.</p>
+    <div class="stats">
+      <div class="stat"><span>Available</span><b id="balance">…</b></div>
+      <div class="stat reserved"><span>Reserved</span><b id="reserved">…</b></div>
+    </div>
+    <div class="wallet-id" id="walletId">Loading wallet…</div>
+    <label for="key">ADMIN_WALLET_KEY</label>
+    <input id="key" type="password" autocomplete="off" placeholder="Paste the Cloudflare secret value">
+    <label for="amount">Credits</label>
+    <input id="amount" type="number" inputmode="numeric" min="1" max="10000000" value="1000">
+    <button id="topup" type="button">ADD TEST CREDITS</button>
+    <div class="status" id="status">Loading this browser's wallet session…</div>
+    <a class="back" href="/">Back to AI Studio</a>
+  </section>
+</main>
+<script>
+(() => {
+  let wallet = null;
+  const balance = document.getElementById('balance');
+  const reserved = document.getElementById('reserved');
+  const walletId = document.getElementById('walletId');
+  const key = document.getElementById('key');
+  const amount = document.getElementById('amount');
+  const topup = document.getElementById('topup');
+  const status = document.getElementById('status');
+
+  function setStatus(message, kind = '') {
+    status.textContent = message;
+    status.className = `status ${kind}`.trim();
+  }
+
+  function render(next) {
+    wallet = next;
+    balance.textContent = Number(next.balance || 0).toLocaleString();
+    reserved.textContent = Number(next.reserved || 0).toLocaleString();
+    walletId.textContent = next.userId || 'Wallet ID unavailable';
+  }
+
+  async function loadWallet() {
+    try {
+      const response = await fetch('/api/wallet', { credentials: 'same-origin', cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'Wallet could not load.');
+      render(payload.wallet);
+      setStatus('Wallet ready. Enter the same ADMIN_WALLET_KEY value saved in Cloudflare.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Wallet unavailable.', 'error');
+      topup.disabled = true;
+    }
+  }
+
+  topup.addEventListener('click', async () => {
+    const adminKey = key.value.trim();
+    const credits = Math.round(Number(amount.value));
+    if (!wallet?.userId) return setStatus('Wallet ID is not ready.', 'error');
+    if (adminKey.length < 24) return setStatus('Paste the full ADMIN_WALLET_KEY value.', 'error');
+    if (!Number.isInteger(credits) || credits < 1 || credits > 10000000) return setStatus('Credits must be between 1 and 10,000,000.', 'error');
+
+    topup.disabled = true;
+    topup.textContent = 'ADDING…';
+    setStatus('Authorizing owner top-up…');
+    try {
+      const response = await fetch('/api/admin/wallet/topup', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json', 'x-admin-wallet-key': adminKey },
+        body: JSON.stringify({ userId: wallet.userId, amount: credits, note: 'Owner test credit grant' }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'Top-up failed safely.');
+      render(payload.wallet);
+      key.value = '';
+      setStatus(`${credits.toLocaleString()} credits added. New balance: ${Number(payload.wallet.balance || 0).toLocaleString()}.`, 'good');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Top-up failed safely.', 'error');
+    } finally {
+      topup.disabled = false;
+      topup.textContent = 'ADD TEST CREDITS';
+    }
+  });
+
+  loadWallet();
+})();
+</script>
+</body>
+</html>
