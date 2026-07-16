@@ -2,5 +2,13 @@
   Cache-Control: no-store, no-cache, must-revalidate
 /index.html
   Cache-Control: no-store, no-cache, must-revalidate
+/yagna.css
+  Cache-Control: no-store, no-cache, must-revalidate
+/yagna.js
+  Cache-Control: no-store, no-cache, must-revalidate
+/yagna-presence.css
+  Cache-Control: no-store, no-cache, must-revalidate
+/yagna-presence.js
+  Cache-Control: no-store, no-cache, must-revalidate
 /api/*
   Cache-Control: no-store
