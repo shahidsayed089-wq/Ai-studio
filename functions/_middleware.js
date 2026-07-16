@@ -40,7 +40,7 @@ export async function onRequest(context) {
       .on('body', {
         element(element) {
           element.append(
-            '<script src="/assets/version-sync.js?v=20260714-pricing"></script><script src="/assets/logo-pass.js?v=20260714-pricing"></script><script src="/assets/live-beta.js?v=20260714-pricing"></script><script src="/assets/seedance-live.js?v=20260714-pricing"></script><script src="/assets/seedance-safety.js?v=20260714-pricing"></script><script src="/assets/wallet.js?v=20260714-pricing"></script><script src="/assets/pricing.js?v=20260714-pricing"></script>',
+            '<script src="/assets/version-sync.js?v=20260716-owner-topup"></script><script src="/assets/logo-pass.js?v=20260716-owner-topup"></script><script src="/assets/live-beta.js?v=20260716-owner-topup"></script><script src="/assets/seedance-live.js?v=20260716-owner-topup"></script><script src="/assets/seedance-safety.js?v=20260716-owner-topup"></script><script src="/assets/wallet.js?v=20260716-owner-topup"></script><script src="/assets/pricing.js?v=20260716-owner-topup"></script>',
             { html: true },
           );
         },
