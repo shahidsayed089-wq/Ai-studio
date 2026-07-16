@@ -10,6 +10,8 @@
   Cache-Control: no-store, no-cache, must-revalidate
 /open-studio.js
   Cache-Control: no-store, no-cache, must-revalidate
+/open-studio-entry.css
+  Cache-Control: no-store, no-cache, must-revalidate
 /explore.css
   Cache-Control: no-store, no-cache, must-revalidate
 /explore.js
