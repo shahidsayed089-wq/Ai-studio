@@ -2,8 +2,6 @@ const SESSION_COOKIE = 'ai_studio_session';
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
 const SCHEMA = `
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS wallets (
   user_id TEXT PRIMARY KEY,
   balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
@@ -145,12 +143,20 @@ export class WalletError extends Error {
   }
 }
 
+function decodeCookieValue(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return '';
+  }
+}
+
 function parseCookies(request) {
   const header = request.headers.get('cookie') || '';
   return Object.fromEntries(
     header.split(';').map(part => part.trim()).filter(Boolean).map(part => {
       const index = part.indexOf('=');
-      return index < 0 ? [part, ''] : [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
+      return index < 0 ? [part, ''] : [part.slice(0, index), decodeCookieValue(part.slice(index + 1))];
     }),
   );
 }
@@ -187,10 +193,17 @@ function safeEqual(a, b) {
 
 export async function ensureWalletSchema(db) {
   if (!db) throw new WalletError('wallet_database_missing', 'Bind a Cloudflare D1 database as DB.', 503);
-  if (!schemaPromise) schemaPromise = db.exec(SCHEMA).catch(error => {
-    schemaPromise = undefined;
-    throw error;
-  });
+  if (!schemaPromise) {
+    schemaPromise = db.exec(SCHEMA).catch(error => {
+      schemaPromise = undefined;
+      console.error('wallet_schema_init_failed', String(error?.message || error));
+      throw new WalletError(
+        'wallet_schema_init_failed',
+        'The D1 database is connected, but the wallet schema could not be initialized.',
+        503,
+      );
+    });
+  }
   await schemaPromise;
 }
 
@@ -337,6 +350,7 @@ export function walletErrorResponse(error, setCookie = null) {
       { status: error.status },
     );
   }
+  console.error('wallet_internal_error', String(error?.message || error));
   return walletResponse(
     { error: 'wallet_internal_error', message: 'Wallet operation failed safely. No credits were changed.' },
     setCookie,
