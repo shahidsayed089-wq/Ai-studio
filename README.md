@@ -1,6 +1,6 @@
 # SHAZAN AI Studio
 
-Premium multi-model generative AI studio built with Next.js, Vinext and Cloudflare Workers.
+Premium multi-model generative AI studio built with Next.js, Vinext and Cloudflare Pages.
 
 ## Local development
 
@@ -20,22 +20,22 @@ npm run lint
 npm run build
 ```
 
-## Deploy to Cloudflare Workers
+## Deploy to Cloudflare Pages
 
-The production build generates a Worker configuration at `dist/server/wrangler.json`.
+The production build generates the static website, including `index.html`, in `dist/client`.
 
 ```bash
 npm run deploy
 ```
 
-For Cloudflare Workers Builds connected to this repository:
+For the `ai-studio-1n1` Cloudflare Pages project connected to this repository:
 
 - Production branch: `main`
-- Build command: `npm ci`
-- Deploy command: `npm run deploy`
+- Build command: `npm run build`
+- Build output directory: `dist/client`
 - Node version: `22`
 
-Add these under **Workers & Pages → Settings → Variables and Secrets**:
+Add these under **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** when the server-side Pages Function is connected:
 
 - `HIGGSFIELD_API_KEY` — encrypted secret
 - `HIGGSFIELD_API_BASE_URL` — optional text variable
@@ -44,4 +44,4 @@ Never commit API keys to GitHub or expose them through `NEXT_PUBLIC_` variables.
 
 ## Current status
 
-The cinematic UI, model catalogue, multimodal limits and credit calculator are implemented. Provider generation endpoints will be connected server-side after the Higgsfield API key and exact model catalogue are available.
+The cinematic UI, model catalogue, multimodal limits and credit calculator are implemented. Provider generation endpoints will be connected through a server-side Pages Function after the Higgsfield API key and exact model catalogue are available.
