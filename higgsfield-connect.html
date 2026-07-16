@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Connect Higgsfield · Shazan AI Studio</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#05090a;color:#eefcf9}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;padding:18px;background:radial-gradient(circle at 50% 0,#113535 0,#071112 38%,#040707 100%)}
+    main{width:min(620px,100%);margin:0 auto;padding:20px 0 40px}.brand{font-size:13px;color:#50f1e3;font-weight:950;letter-spacing:.09em}.card{margin-top:16px;padding:20px;border:1px solid rgba(80,241,227,.25);border-radius:22px;background:rgba(7,13,14,.95);box-shadow:0 28px 80px rgba(0,0,0,.48)}
+    h1{margin:0;font-size:31px;line-height:1.05}p{color:#92a5a1;font-size:14px;line-height:1.55}.truth{padding:12px;border:1px solid rgba(255,218,131,.23);border-radius:12px;background:rgba(255,218,131,.045);color:#c9b98d;font-size:12px;line-height:1.5}
+    .status{margin:16px 0;padding:13px;border-radius:12px;background:#0b1213;color:#9aacaa;font-size:12px;line-height:1.5}.status.good{color:#79f4b8;border:1px solid rgba(121,244,184,.2)}.status.error{color:#ff9ca3;border:1px solid rgba(255,156,163,.2)}
+    .actions{display:grid;gap:10px;margin-top:16px}button,a.button{display:flex;align-items:center;justify-content:center;width:100%;height:50px;border:0;border-radius:12px;background:#24e4d7;color:#021313;text-decoration:none;font-size:13px;font-weight:950}button.secondary{background:#121a1b;color:#dffefa;border:1px solid rgba(255,255,255,.11)}button.danger{background:#211113;color:#ffb0b5;border:1px solid rgba(255,156,163,.16)}button:disabled{opacity:.5}
+    .summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.stat{padding:13px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0a1011}.stat span{display:block;color:#71827f;font-size:9px;text-transform:uppercase;letter-spacing:.08em}.stat b{display:block;margin-top:6px;font-size:18px;color:#55f2e4}
+    .tools{margin-top:16px}.tool{padding:13px 0;border-top:1px solid rgba(255,255,255,.07)}.tool:first-child{border-top:0}.tool b{font-size:12px;color:#ecfbf8}.tool small{display:block;margin-top:5px;color:#7f928e;font-size:10px;line-height:1.45}.seedance{color:#79f4b8!important}.back{display:block;text-align:center;margin-top:17px;color:#71ddd5;text-decoration:none;font-size:12px}
+    @media(max-width:520px){.summary{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">SHAZAN AI STUDIO</div>
+  <section class="card">
+    <h1>Connect Higgsfield</h1>
+    <p>Sign in through the official Higgsfield authorization screen. AI Studio stores encrypted access tokens in D1 and never asks you to paste an API key.</p>
+    <div class="truth">No generation runs on this page. Connecting and listing MCP tools should not consume video credits.</div>
+    <div id="status" class="status">Checking connection…</div>
+    <div class="summary">
+      <div class="stat"><span>Account</span><b id="account">CHECKING</b></div>
+      <div class="stat"><span>Seedance tool</span><b id="seedance">NOT TESTED</b></div>
+    </div>
+    <div class="actions">
+      <a class="button" id="connect" href="/api/higgsfield/connect/start">CONNECT HIGGSFIELD ACCOUNT</a>
+      <button class="secondary" id="probe" type="button" disabled>TEST MCP TOOL ACCESS</button>
+      <button class="danger" id="disconnect" type="button" hidden>DISCONNECT ACCOUNT</button>
+    </div>
+    <div class="tools" id="tools"></div>
+    <a class="back" href="/">Back to AI Studio</a>
+  </section>
+</main>
+<script>
+(() => {
+  const statusNode = document.getElementById('status');
+  const accountNode = document.getElementById('account');
+  const seedanceNode = document.getElementById('seedance');
+  const connect = document.getElementById('connect');
+  const probe = document.getElementById('probe');
+  const disconnect = document.getElementById('disconnect');
+  const toolsNode = document.getElementById('tools');
+
+  function status(message, kind = '') {
+    statusNode.textContent = message;
+    statusNode.className = `status ${kind}`.trim();
+  }
+
+  function renderTools(tools) {
+    toolsNode.innerHTML = '';
+    if (!tools.length) {
+      toolsNode.innerHTML = '<div class="tool"><small>No MCP tools were returned.</small></div>';
+      return false;
+    }
+    let hasSeedance = false;
+    tools.forEach(tool => {
+      const haystack = `${tool.name || ''} ${tool.title || ''} ${tool.description || ''}`.toLowerCase();
+      if (haystack.includes('seedance')) hasSeedance = true;
+      const row = document.createElement('div');
+      row.className = 'tool';
+      row.innerHTML = `<b class="${haystack.includes('seedance') ? 'seedance' : ''}">${tool.title || tool.name}</b><small>${tool.name}${tool.description ? ` · ${tool.description}` : ''}</small>`;
+      toolsNode.appendChild(row);
+    });
+    return hasSeedance;
+  }
+
+  async function loadStatus() {
+    try {
+      const response = await fetch('/api/higgsfield/status', { credentials: 'same-origin', cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'Connection status failed.');
+      const connected = Boolean(payload.connected);
+      accountNode.textContent = connected ? 'CONNECTED' : 'NOT CONNECTED';
+      connect.hidden = connected;
+      probe.disabled = !connected;
+      disconnect.hidden = !connected;
+      status(connected
+        ? 'Higgsfield account connected. Now test MCP tools before buying credits.'
+        : 'No Higgsfield account is connected yet.', connected ? 'good' : '');
+    } catch (error) {
+      accountNode.textContent = 'ERROR';
+      status(error instanceof Error ? error.message : 'Connection status failed.', 'error');
+    }
+  }
+
+  probe.addEventListener('click', async () => {
+    probe.disabled = true;
+    probe.textContent = 'TESTING MCP…';
+    seedanceNode.textContent = 'CHECKING';
+    toolsNode.innerHTML = '';
+    status('Initializing the official Higgsfield MCP server and requesting tools/list…');
+    try {
+      const response = await fetch('/api/higgsfield/tools', { credentials: 'same-origin', cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'MCP tools test failed.');
+      const tools = Array.isArray(payload.tools) ? payload.tools : [];
+      const hasSeedance = renderTools(tools);
+      seedanceNode.textContent = hasSeedance ? 'AVAILABLE' : 'NOT FOUND';
+      status(hasSeedance
+        ? `MCP connection proven. ${tools.length} tools returned and Seedance access was detected.`
+        : `MCP connection works and returned ${tools.length} tools, but no Seedance-named tool was detected.`,
+        hasSeedance ? 'good' : 'error');
+    } catch (error) {
+      seedanceNode.textContent = 'FAILED';
+      status(error instanceof Error ? error.message : 'MCP tools test failed.', 'error');
+    } finally {
+      probe.disabled = false;
+      probe.textContent = 'TEST MCP TOOL ACCESS';
+    }
+  });
+
+  disconnect.addEventListener('click', async () => {
+    disconnect.disabled = true;
+    try {
+      await fetch('/api/higgsfield/disconnect', { method: 'POST', credentials: 'same-origin' });
+      seedanceNode.textContent = 'NOT TESTED';
+      toolsNode.innerHTML = '';
+      await loadStatus();
+    } finally {
+      disconnect.disabled = false;
+    }
+  });
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('connected') === '1') status('Login returned successfully. Verifying the stored connection…', 'good');
+  if (params.get('error')) status(params.get('error'), 'error');
+  loadStatus();
+})();
+</script>
+</body>
+</html>
