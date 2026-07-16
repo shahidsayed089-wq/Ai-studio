@@ -6,7 +6,7 @@ import {
   extractToolResult,
   findMediaImportTool,
 } from '../../_lib/higgsfield-tools.js';
-import { selectGenerationTool } from '../../_lib/higgsfield-detect.js';
+import { isImageTool, isVideoTool, selectGenerationTool } from '../../_lib/higgsfield-detect.js';
 import { createHiggsfieldJob, updateHiggsfieldJob } from '../../_lib/higgsfield-jobs.js';
 import { resolveWalletUser, walletErrorResponse, walletResponse, WalletError } from '../../_lib/wallet.js';
 
@@ -44,7 +44,7 @@ export async function onRequestPost({ request, env }) {
       throw new WalletError('invalid_prompt', 'Prompt must be between 3 and 6000 characters.', 400);
     }
 
-    const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : (kind === 'image' ? 'gpt_image_2' : 'seedance_2_0');
+    const requestedModel = typeof body.model === 'string' ? body.model.trim() : '';
     const aspectRatio = ASPECTS.has(body.aspectRatio) ? body.aspectRatio : '9:16';
     const resolution = RESOLUTIONS.has(body.resolution) ? body.resolution : '720p';
     const durationNumber = Number(body.duration);
@@ -56,10 +56,20 @@ export async function onRequestPost({ request, env }) {
 
     const accessToken = await getHiggsfieldAccessToken(env.DB, env, session.userId);
     const catalog = await listHiggsfieldTools(accessToken);
-    const generationTool = selectGenerationTool(catalog.tools, kind, body.toolName);
+    const kindTest = kind === 'image' ? isImageTool : isVideoTool;
+    const requestedTool = catalog.tools.find(tool => tool.name === requestedModel && kindTest(tool));
+    const requestedToolName = typeof body.toolName === 'string' && body.toolName.trim()
+      ? body.toolName.trim()
+      : requestedTool?.name || '';
+    const generationTool = selectGenerationTool(catalog.tools, kind, requestedToolName);
+
     if (!generationTool) {
       throw new WalletError('generation_tool_unavailable', `No ${kind} generation tool is available on this Higgsfield account.`, 503);
     }
+
+    const autoModel = requestedTool?.name === generationTool.name;
+    const model = autoModel ? '' : (requestedModel || (kind === 'image' ? 'gpt_image_2' : 'seedance_2_0'));
+    const displayModel = model || generationTool.title || generationTool.name;
 
     const mediaIds = [];
     if (referenceUrls.length) {
@@ -93,9 +103,9 @@ export async function onRequestPost({ request, env }) {
       userId: session.userId,
       kind,
       toolName: generationTool.name,
-      model,
+      model: displayModel,
       prompt,
-      request: { ...generationInput, referenceUrls, args },
+      request: { ...generationInput, referenceUrls, args, autoModel },
     });
 
     const result = await callHiggsfieldTool(accessToken, generationTool.name, args);
