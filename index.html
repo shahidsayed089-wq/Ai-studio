@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#070605">
   <meta name="description" content="Shazan AI Studio powered by Yagna Engine, an ember-gold cinematic creation forge connected to Higgsfield MCP.">
   <title>Yagna Engine | Shazan AI Studio</title>
-  <link rel="stylesheet" href="/yagna.css?v=12">
+  <link rel="stylesheet" href="/yagna.css?v=13">
+  <link rel="stylesheet" href="/yagna-presence.css?v=13">
 </head>
 <body>
   <div class="ember-field" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
@@ -27,7 +28,7 @@
     </nav>
 
     <div class="account">
-      <div class="engine-state"><i></i><span id="engineText">Yagna checking</span></div>
+      <div class="engine-state preparing"><i></i><span id="engineText">Preparing studio</span></div>
       <div class="avatar">SK</div>
     </div>
   </header>
@@ -60,8 +61,8 @@
           <span class="count">Director prompt</span>
         </div>
 
-        <div class="field-title">Engine <span>Live MCP schema</span></div>
-        <select class="model-select" id="modelSelect" aria-label="Generation model"></select>
+        <div class="field-title">Engine <span>Connected catalog</span></div>
+        <select class="model-select" id="modelSelect" aria-label="Generation model"><option value="">Curating available engines</option></select>
 
         <div class="controls">
           <div class="control"><label for="aspect">Frame</label><select id="aspect"><option value="9:16">9:16 Vertical</option><option value="16:9">16:9 Cinema</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Classic</option><option value="3:4">3:4 Portrait</option><option value="21:9">21:9 Ultra-wide</option></select></div>
@@ -88,18 +89,18 @@
     <section class="studio">
       <div class="studio-head">
         <div><span class="kicker">EMBER-GOLD CREATION SYSTEM</span><h1>Turn intent into <span>cinematic matter.</span></h1></div>
-        <div class="metrics"><span class="metric" id="metricTools"><b>0</b> MCP tools</span><span class="metric" id="metricEngines"><b>0</b> forge routes</span><span class="metric hot" id="metricModels"><b>0</b> true models</span></div>
+        <div class="metrics"><span class="metric is-loading" id="metricTools">Connected ecosystem</span><span class="metric is-loading" id="metricEngines">Creative routing</span><span class="metric hot is-loading" id="metricModels">Live engine catalog</span></div>
       </div>
 
       <section class="stage">
         <div class="stage-copy">
-          <span class="engine-tag"><i></i><span id="stageKind">Motion forge</span><span>·</span><span id="activeModelName">Awaiting model</span></span>
+          <span class="engine-tag"><i></i><span id="stageKind">Motion direction</span><span>·</span><span id="activeModelName">Curating engines</span></span>
           <h2>Yagna turns a prompt into a production decision.</h2>
           <p>Direct genuine connected models through one original filmmaking interface, without exposing provider tokens to the browser.</p>
         </div>
-        <span class="stage-status" id="outputStatus">Yagna idle</span>
+        <span class="stage-status ready-state" id="outputStatus">Ready to create</span>
         <div class="stage-output" id="outputVisual"><div class="empty-flame">♨</div></div>
-        <div class="output-caption"><b id="outputTitle">The forge is ready</b><p id="outputCopy">Choose an engine, write the direction and ignite a render.</p></div>
+        <div class="output-caption"><b id="outputTitle">The stage is yours</b><p id="outputCopy">Choose a direction. Yagna will reveal the best connected engine for the shot.</p></div>
       </section>
 
       <div class="view-tabs">
@@ -110,19 +111,19 @@
       </div>
 
       <section class="panel-view active" id="view-models">
-        <div class="section-top"><div><h2 id="modelHeading">Motion engines</h2><span id="modelSubheading">Loading genuine connected models</span></div><div class="filters"><button class="active" type="button">Connected</button><button type="button">MCP</button></div></div>
-        <div class="model-grid" id="modelGrid"></div>
+        <div class="section-top"><div><h2 id="modelHeading">Motion engines</h2><span id="modelSubheading">Curating available engines</span></div><div class="filters"><button class="active" type="button">Connected</button><button type="button">MCP</button></div></div>
+        <div class="model-grid is-loading" id="modelGrid"><div class="engine-skeleton" aria-hidden="true"><span></span><i></i></div><div class="engine-skeleton" aria-hidden="true"><span></span><i></i></div><div class="engine-skeleton" aria-hidden="true"><span></span><i></i></div><div class="engine-skeleton" aria-hidden="true"><span></span><i></i></div></div>
       </section>
 
       <section class="panel-view" id="view-apps">
-        <div class="section-top"><div><h2>Yagna Forge</h2><span id="forgeCount">Connected MCP capabilities</span></div></div>
+        <div class="section-top"><div><h2>Yagna Forge</h2><span id="forgeCount">Connected creative capabilities</span></div></div>
         <div class="filters" id="categoryFilters" style="margin-bottom:10px;overflow:auto"></div>
-        <div class="apps-toolbar"><input class="apps-search" id="appsSearch" placeholder="Search tools, media, marketing, 3D, analysis..."><span class="apps-count" id="appsCount">0 tools</span></div>
+        <div class="apps-toolbar"><input class="apps-search" id="appsSearch" placeholder="Search tools, media, marketing, 3D, analysis..."><span class="apps-count" id="appsCount">Connected collection</span></div>
         <div class="apps-grid" id="appsGrid"></div>
       </section>
 
       <section class="panel-view" id="view-jobs">
-        <div class="section-top"><div><h2>Render Vault</h2><span>Active, completed and failed generations</span></div></div>
+        <div class="section-top"><div><h2>Render Vault</h2><span>Your active and completed creations</span></div></div>
         <div class="jobs-list" id="jobsList"></div>
       </section>
     </section>
@@ -135,6 +136,7 @@
     <button type="button" data-dock="jobs"><span>▣</span>Vault</button>
   </nav>
 
-  <script src="/yagna.js?v=12" defer></script>
+  <script src="/yagna.js?v=13" defer></script>
+  <script src="/yagna-presence.js?v=13" defer></script>
 </body>
 </html>
