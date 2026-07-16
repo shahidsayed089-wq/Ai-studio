@@ -14,7 +14,7 @@
   });
 
   document.addEventListener('click', event => {
-    if (window.innerWidth > 900 || !sidebar?.classList.contains('open')) return;
+    if (window.innerWidth > 760 || !sidebar?.classList.contains('open')) return;
     if (!sidebar.contains(event.target) && event.target !== menuButton) closeSidebar();
   });
 
@@ -22,17 +22,13 @@
 
   function runSearch(value) {
     const query = String(value || '').trim().toLowerCase();
-    const cards = [...document.querySelectorAll('[data-search-card]')];
-    const sections = [...document.querySelectorAll('[data-search-section]')];
-
-    cards.forEach(card => {
-      const haystack = `${card.dataset.searchCard || ''} ${card.textContent || ''}`.toLowerCase();
-      card.dataset.hidden = query && !haystack.includes(query) ? 'true' : 'false';
+    document.querySelectorAll('[data-search-card]').forEach(card => {
+      const text = `${card.dataset.searchCard || ''} ${card.textContent || ''}`.toLowerCase();
+      card.dataset.hidden = query && !text.includes(query) ? 'true' : 'false';
     });
-
-    sections.forEach(section => {
-      const sectionCards = [...section.querySelectorAll('[data-search-card]')];
-      section.dataset.hidden = query && sectionCards.length && sectionCards.every(card => card.dataset.hidden === 'true') ? 'true' : 'false';
+    document.querySelectorAll('[data-search-section]').forEach(section => {
+      const cards = [...section.querySelectorAll('[data-search-card]')];
+      section.dataset.hidden = query && cards.length && cards.every(card => card.dataset.hidden === 'true') ? 'true' : 'false';
     });
   }
 
@@ -44,20 +40,19 @@
       search?.select();
     }
     if (event.key === 'Escape') {
-      if (document.activeElement === search) search.blur();
+      search?.blur();
       closeSidebar();
     }
   });
 
   async function loadStatus() {
-    const label = $('homeStatusText');
     try {
       const response = await fetch('/api/health', { cache: 'no-store' });
       const data = await response.json().catch(() => ({}));
       const ready = Boolean(data.checks?.seedance2Api || data.ok || data.status === 'ok');
-      if (label) label.textContent = ready ? 'Yagna live' : 'Studio online';
+      if ($('homeStatusText')) $('homeStatusText').textContent = ready ? 'Yagna live' : 'Studio online';
     } catch {
-      if (label) label.textContent = 'Studio online';
+      if ($('homeStatusText')) $('homeStatusText').textContent = 'Studio online';
     }
   }
 
@@ -65,31 +60,25 @@
     try {
       const response = await fetch('/api/wallet', { credentials: 'same-origin', cache: 'no-store' });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.wallet) throw new Error('Wallet unavailable');
-
-      const rawBalance = Number(data.wallet.balance || 0);
-      const formatted = rawBalance.toLocaleString();
-      const sideCredits = $('sideCredits');
-      if (sideCredits) sideCredits.textContent = `${formatted} credits`;
-
-      const progress = $('creditProgress');
-      if (progress) {
-        const cap = Math.max(Number(data.wallet.limit || 30000), rawBalance, 1);
-        progress.style.width = `${Math.max(4, Math.min(100, (rawBalance / cap) * 100))}%`;
+      if (!response.ok || !data.wallet) throw new Error('wallet unavailable');
+      const balance = Number(data.wallet.balance || 0);
+      if ($('sideCredits')) $('sideCredits').textContent = `${balance.toLocaleString()} credits`;
+      if ($('creditProgress')) {
+        const cap = Math.max(Number(data.wallet.limit || 30000), balance, 1);
+        $('creditProgress').style.width = `${Math.max(4, Math.min(100, balance / cap * 100))}%`;
       }
     } catch {
-      const sideCredits = $('sideCredits');
-      if (sideCredits) sideCredits.textContent = 'Studio credits';
+      if ($('sideCredits')) $('sideCredits').textContent = 'Studio credits';
     }
   }
 
-  const heroArt = document.querySelector('.hero-art img');
-  if (heroArt && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const heroImage = document.querySelector('.hero-visual img');
+  if (heroImage && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     window.addEventListener('pointermove', event => {
-      if (window.innerWidth < 901) return;
-      const x = (event.clientX / window.innerWidth - 0.5) * 8;
-      const y = (event.clientY / window.innerHeight - 0.5) * 5;
-      heroArt.style.transform = `scale(1.06) translate(${x}px, ${y}px)`;
+      if (window.innerWidth < 900) return;
+      const x = (event.clientX / innerWidth - .5) * 7;
+      const y = (event.clientY / innerHeight - .5) * 4;
+      heroImage.style.transform = `scale(1.06) translate(${x}px,${y}px)`;
     }, { passive: true });
   }
 
