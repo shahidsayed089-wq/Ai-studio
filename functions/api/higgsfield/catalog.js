@@ -1,5 +1,5 @@
 import { getHiggsfieldAccessToken, listHiggsfieldTools } from '../../_lib/higgsfield.js';
-import { isImageTool, isVideoTool, toolText } from '../../_lib/higgsfield-tools.js';
+import { isImageTool, isVideoTool, toolText } from '../../_lib/higgsfield-detect.js';
 import { resolveWalletUser, walletErrorResponse, walletResponse } from '../../_lib/wallet.js';
 
 const KNOWN_MODELS = [
