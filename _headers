@@ -2,6 +2,10 @@
   Cache-Control: no-store, no-cache, must-revalidate
 /index.html
   Cache-Control: no-store, no-cache, must-revalidate
+/studio-home.css
+  Cache-Control: no-store, no-cache, must-revalidate
+/studio-home.js
+  Cache-Control: no-store, no-cache, must-revalidate
 /create.html
   Cache-Control: no-store, no-cache, must-revalidate
 /open-studio.html
