@@ -1,9 +1,10 @@
 # Verified Cloudflare Deployment
 
-- Status: live AI verified
+- Status: visual AI studio verified
 - URL: https://ai-studio-1n1.pages.dev
 - Create URL: https://ai-studio-1n1.pages.dev/create.html
-- Source commit: e458258b5759363de04a7a1b83d9ef277b88ff0f
-- Verified at: 2026-07-16T18:04:32Z
+- Source commit: a32f31ff6040bc8276ab97e0a42ae54b104535c7
+- Verified at: 2026-07-16T18:12:02Z
+- Homepage: visual creator dashboard
 - Seedance API health: ready
 - D1/R2/secrets: inherited from existing ai-studio project
