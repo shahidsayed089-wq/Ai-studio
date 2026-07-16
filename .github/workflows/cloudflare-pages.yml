@@ -59,26 +59,26 @@ jobs:
           command: pages deploy . --project-name=ai-studio --branch=main --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify live UI and AI bindings
+      - name: Verify visual dashboard and AI bindings
         shell: bash
         run: |
           verified=0
           for attempt in $(seq 1 18); do
             echo "Verification attempt $attempt"
             home_ok=0
-            bridge_ok=0
+            create_ok=0
             api_ok=0
 
             if curl --fail --silent --show-error --location --max-time 20 \
               "$PRODUCTION_URL/?verify=${GITHUB_SHA}-${attempt}" \
-              | grep -Fq "Shazan AI Studio | Yagna Engine"; then
+              | grep -Fq "What would you like to create?"; then
               home_ok=1
             fi
 
             if curl --fail --silent --show-error --location --max-time 20 \
               "$PRODUCTION_URL/create.html?verify=${GITHUB_SHA}-${attempt}" \
-              | grep -Fq "seedance-bridge.js"; then
-              bridge_ok=1
+              | grep -Fq "AI CREATION WORKSPACE"; then
+              create_ok=1
             fi
 
             if curl --fail --silent --show-error --location --max-time 20 \
@@ -87,7 +87,7 @@ jobs:
               api_ok=1
             fi
 
-            if [[ "$home_ok" == "1" && "$bridge_ok" == "1" && "$api_ok" == "1" ]]; then
+            if [[ "$home_ok" == "1" && "$create_ok" == "1" && "$api_ok" == "1" ]]; then
               verified=1
               break
             fi
@@ -95,7 +95,7 @@ jobs:
           done
 
           if [[ "$verified" != "1" ]]; then
-            echo "Live UI or Seedance API health verification failed."
+            echo "Live visual dashboard or Seedance API verification failed."
             exit 1
           fi
 
@@ -105,11 +105,12 @@ jobs:
           cat > DEPLOYMENT_STATUS.md <<EOF
           # Verified Cloudflare Deployment
 
-          - Status: live AI verified
+          - Status: visual AI studio verified
           - URL: $PRODUCTION_URL
           - Create URL: $PRODUCTION_URL/create.html
           - Source commit: $GITHUB_SHA
           - Verified at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          - Homepage: visual creator dashboard
           - Seedance API health: ready
           - D1/R2/secrets: inherited from existing ai-studio project
           EOF
@@ -117,5 +118,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add DEPLOYMENT_STATUS.md
-          git commit -m "Record verified live AI deployment [skip ci]" || exit 0
+          git commit -m "Record verified visual AI studio deployment [skip ci]" || exit 0
           git push
