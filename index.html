@@ -1,43 +1,118 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#06100f">
-<meta name="description" content="Shazan AI Studio, a real Higgsfield-powered AI image and video creation workspace.">
-<title>Shazan AI Studio</title>
-<style>
-:root{color-scheme:dark;--bg:#050807;--panel:#0b1110;--panel2:#101817;--line:#21312f;--text:#f4fbfa;--muted:#8ea39f;--cyan:#18e6d7;--cyan2:#77fff5;--good:#6ef0b4;--bad:#ff9da5;--gold:#f4d889;--shadow:0 28px 90px rgba(0,0,0,.48)}
-*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;background:radial-gradient(circle at 70% -10%,rgba(24,230,215,.13),transparent 32%),linear-gradient(180deg,#07100f,#040706 70%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,textarea,select{font:inherit}button{cursor:pointer}a{color:inherit}.top{height:72px;padding:0 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20;background:rgba(5,8,7,.87);backdrop-filter:blur(20px)}.brand{display:flex;align-items:center;gap:11px;font-family:Georgia,"Times New Roman",serif;font-size:25px}.mark{width:35px;height:35px;display:grid;place-items:center;color:#031210;background:var(--cyan);clip-path:polygon(50% 0,61% 36%,100% 50%,61% 63%,50% 100%,39% 63%,0 50%,39% 36%);font-family:system-ui;font-weight:900}.brand b{color:var(--cyan);font-weight:500}.top-actions{display:flex;align-items:center;gap:9px}.status-pill{height:38px;border:1px solid var(--line);border-radius:99px;background:#0b1211;color:var(--muted);padding:0 13px;display:flex;align-items:center;gap:8px;font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#6a7774}.status-pill.good{color:var(--good);border-color:rgba(110,240,180,.25)}.status-pill.good .status-dot{background:var(--good);box-shadow:0 0 18px var(--good)}.status-pill.bad{color:var(--bad);border-color:rgba(255,157,165,.25)}.manage{height:38px;border:1px solid var(--line);border-radius:10px;background:#101716;color:var(--cyan);padding:0 13px;text-decoration:none;display:flex;align-items:center;font-weight:800;font-size:12px}.wrap{width:min(1240px,100%);margin:auto;padding:32px 18px 70px}.hero{display:grid;grid-template-columns:1fr auto;gap:30px;align-items:end;margin-bottom:24px}.eyebrow{color:var(--cyan);font-size:11px;font-weight:900;letter-spacing:.16em}.hero h1{font-size:clamp(40px,7vw,78px);line-height:.92;letter-spacing:-.065em;margin:10px 0 14px;max-width:800px}.hero h1 span{color:var(--cyan);text-shadow:0 0 34px rgba(24,230,215,.25)}.hero p{max-width:670px;color:var(--muted);font-size:16px;line-height:1.65;margin:0}.hero-badge{border:1px solid rgba(24,230,215,.2);background:rgba(24,230,215,.055);padding:13px 15px;border-radius:14px;color:#bcece8;font-size:12px}.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.65fr);gap:18px}.panel{border:1px solid var(--line);border-radius:22px;background:linear-gradient(155deg,rgba(15,23,22,.96),rgba(7,11,10,.98));box-shadow:var(--shadow);overflow:hidden}.panel-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px}.panel-head h2{font-size:16px;margin:0}.panel-head small{color:var(--muted)}.mode{display:flex;border:1px solid var(--line);border-radius:11px;padding:4px;background:#080d0c}.mode button{height:34px;border:0;border-radius:8px;background:transparent;color:var(--muted);padding:0 15px;font-weight:800}.mode button.active{background:var(--cyan);color:#03110f}.body{padding:20px}.field-label{display:block;color:#cfe1de;font-size:12px;font-weight:800;margin-bottom:8px}.prompt{width:100%;min-height:170px;resize:vertical;border:1px solid var(--line);border-radius:16px;background:#070b0a;color:var(--text);padding:17px;outline:none;line-height:1.55}.prompt:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(24,230,215,.08)}.model-line{display:flex;justify-content:space-between;gap:10px;margin:17px 0 9px}.model-line span{color:var(--muted);font-size:11px}.models{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.model{min-height:78px;border:1px solid var(--line);border-radius:14px;background:#0b1110;color:#d8e6e3;text-align:left;padding:12px;transition:.2s}.model:hover{transform:translateY(-2px)}.model.active{border-color:var(--cyan);background:linear-gradient(145deg,rgba(24,230,215,.16),rgba(24,230,215,.04));box-shadow:inset 0 0 0 1px rgba(24,230,215,.18)}.model b{display:block;font-size:13px}.model small{display:block;margin-top:6px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.08em}.empty-models{grid-column:1/-1;border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--muted);font-size:12px}.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:17px}.control span{display:block;color:var(--muted);font-size:10px;margin:0 0 7px 3px}.control select,.control input{width:100%;height:43px;border:1px solid var(--line);border-radius:11px;background:#080d0c;color:white;padding:0 11px;outline:none}.advanced{margin-top:15px;border:1px solid var(--line);border-radius:14px;background:#090e0d}.advanced summary{padding:14px 15px;color:#c8d8d5;font-size:12px;cursor:pointer}.advanced-inner{padding:0 15px 15px;display:grid;gap:11px}.advanced-inner input{width:100%;height:43px;border:1px solid var(--line);border-radius:11px;background:#060a09;color:white;padding:0 11px;outline:none}.toggle{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:11px;padding:11px 12px;color:#cbd9d6;font-size:12px}.toggle input{width:19px;height:19px;accent-color:var(--cyan)}.launch{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:18px}.billing{font-size:11px;color:var(--muted)}.billing b{display:block;color:var(--gold);font-size:12px;margin-top:4px}.generate{border:0;border-radius:13px;background:linear-gradient(90deg,var(--cyan),var(--cyan2));color:#02110f;min-width:210px;height:52px;font-weight:950;box-shadow:0 14px 34px rgba(24,230,215,.18)}.generate:disabled{opacity:.45;cursor:not-allowed}.message{min-height:20px;color:var(--muted);font-size:12px;margin:12px 0 0}.message.bad{color:var(--bad)}.message.good{color:var(--good)}.preview{min-height:390px;padding:18px;display:flex;flex-direction:column}.stage{min-height:280px;border:1px solid var(--line);border-radius:17px;background:radial-gradient(circle at 50% 20%,rgba(24,230,215,.12),transparent 34%),#060a09;display:grid;place-items:center;overflow:hidden}.empty{text-align:center;padding:26px;color:var(--muted)}.empty strong{display:block;color:#e7f4f2;margin-bottom:7px}.glyph{width:56px;height:56px;border:1px solid rgba(24,230,215,.25);border-radius:18px;display:grid;place-items:center;margin:0 auto 15px;color:var(--cyan);font-size:25px}.stage video,.stage img{display:block;width:100%;max-height:520px;object-fit:contain;background:#000}.job-card{width:100%;padding:23px;text-align:left}.job-card .state{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:6px 9px;color:var(--cyan);font-size:10px;text-transform:uppercase;letter-spacing:.1em}.job-card h3{font-size:20px;margin:15px 0 8px}.job-card p{color:var(--muted);font-size:12px;line-height:1.55}.progress{height:5px;background:#17201e;border-radius:99px;overflow:hidden;margin-top:18px}.progress i{display:block;width:45%;height:100%;background:var(--cyan);animation:move 1.4s infinite alternate}.recent-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:18px 0 9px}.recent{display:grid;gap:8px}.recent button{width:100%;border:1px solid var(--line);border-radius:12px;background:#090e0d;color:#dce8e6;padding:10px;text-align:left;display:grid;grid-template-columns:1fr auto;gap:8px}.recent b{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recent small{color:var(--muted);font-size:9px}.recent em{font-style:normal;color:var(--cyan);font-size:9px;text-transform:uppercase}.footer{padding:24px 18px 35px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:18px;color:#6f827e;font-size:11px}.footer a{color:#9db4b0;text-decoration:none;margin-left:14px}@keyframes move{from{transform:translateX(-40%)}to{transform:translateX(180%)}}@media(max-width:900px){.hero{grid-template-columns:1fr}.hero-badge{display:none}.grid{grid-template-columns:1fr}.preview{min-height:auto}.stage{min-height:260px}}@media(max-width:620px){.top{height:66px}.brand{font-size:21px}.manage{display:none}.status-pill{max-width:142px;overflow:hidden;white-space:nowrap}.wrap{padding:25px 13px 90px}.hero h1{font-size:49px}.hero p{font-size:14px}.panel{border-radius:18px}.panel-head,.body{padding-left:15px;padding-right:15px}.models{grid-template-columns:1fr 1fr}.controls{grid-template-columns:1fr 1fr}.control:last-child{grid-column:1/-1}.launch{align-items:stretch;flex-direction:column}.generate{width:100%}.footer{flex-direction:column}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080909">
+  <meta name="description" content="Shazan AI Studio, a cinematic multi-model creation workspace powered by a connected Higgsfield account.">
+  <title>Shazan AI Studio</title>
+  <link rel="stylesheet" href="/studio-v3.css?v=9">
 </head>
 <body>
-<header class="top"><div class="brand"><span class="mark">✦</span><span>Shazan <b>AI Studio</b></span></div><div class="top-actions"><div class="status-pill" id="connection"><span class="status-dot"></span><span id="connectionText">Checking Higgsfield</span></div><a class="manage" href="/higgsfield-connect.html">Manage connection</a></div></header>
-<main class="wrap"><section class="hero"><div><span class="eyebrow">REAL HIGGSFIELD CREATION ENGINE</span><h1>Create with models that are <span>actually available.</span></h1><p>No decorative cards, no fake availability. This studio reads the live tool catalog from your connected Higgsfield account and only shows models it can submit to.</p></div><div class="hero-badge">Connected account billing<br><b>No platform markup in beta</b></div></section>
-<section class="grid"><article class="panel"><div class="panel-head"><div><h2>Create generation</h2><small id="catalogSummary">Discovering account tools…</small></div><div class="mode"><button type="button" class="active" data-kind="video">Video</button><button type="button" data-kind="image">Image</button></div></div><div class="body"><form id="form"><label class="field-label" for="prompt">Describe your shot</label><textarea class="prompt" id="prompt" maxlength="6000" required placeholder="A helmeted Indian superspy accelerates through a rain-soaked Dubai tunnel, low rear tracking camera, grounded IMAX realism, red laser grid activating ahead."></textarea><div class="model-line"><label class="field-label">Available models</label><span id="modelCount">0 detected</span></div><div class="models" id="models"><div class="empty-models">Connecting to the live Higgsfield catalog…</div></div><div class="controls"><label class="control"><span>Aspect ratio</span><select id="aspect"><option value="9:16">9:16 Vertical</option><option value="16:9">16:9 Cinematic</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Classic</option><option value="3:4">3:4 Portrait</option><option value="21:9">21:9 Ultra-wide</option></select></label><label class="control" id="durationWrap"><span>Duration</span><select id="duration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option></select></label><label class="control"><span>Resolution</span><select id="resolution"><option value="720p">720p</option><option value="1080p">1080p</option><option value="2k">2K</option><option value="4k">4K</option></select></label></div><details class="advanced"><summary>Advanced controls</summary><div class="advanced-inner"><label><span class="field-label">Negative prompt</span><input id="negative" maxlength="1500" placeholder="warped faces, text, watermark, cartoon physics"></label><label><span class="field-label">Reference media URL</span><input id="reference" type="url" inputmode="url" placeholder="https://... public image or video"></label><label><span class="field-label">Seed</span><input id="seed" type="number" inputmode="numeric" placeholder="Random"></label><label class="toggle" id="audioWrap"><span>Generate audio when supported</span><input id="audio" type="checkbox" checked></label></div></details><div class="launch"><div class="billing">BILLING<b>Uses connected Higgsfield credits</b></div><button class="generate" id="generate" type="submit" disabled>Generate video</button></div><p class="message" id="message" role="status"></p></form></div></article><aside class="panel preview"><div class="panel-head" style="margin:-18px -18px 18px"><div><h2>Live output</h2><small>Jobs refresh automatically</small></div><button type="button" id="refresh" style="border:1px solid var(--line);background:#0b1110;color:var(--cyan);border-radius:9px;width:36px;height:36px">↻</button></div><div class="stage" id="stage"><div class="empty"><div class="glyph">✦</div><strong>Your render appears here</strong><span>Choose a detected model and generate.</span></div></div><div class="recent-title">Recent generations</div><div class="recent" id="recent"></div></aside></section></main>
-<footer class="footer"><span>© 2026 Shazan Khan Productions</span><span><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="mailto:shahidsayed089@gmail.com">Support</a></span></footer>
-<script>
-(() => {
-  navigator.serviceWorker?.getRegistrations?.().then(items => items.forEach(item => item.unregister())).catch(() => {});
-  const state={kind:'video',catalog:null,model:null,jobs:[],poll:null};
-  const q=id=>document.getElementById(id);
-  const connection=q('connection'),connectionText=q('connectionText'),catalogSummary=q('catalogSummary'),models=q('models'),modelCount=q('modelCount'),generate=q('generate'),message=q('message'),stage=q('stage'),recent=q('recent');
-  function setMessage(text,type=''){message.textContent=text||'';message.className='message '+type}
-  function safeText(value){return String(value??'')}
-  function availableModels(){const list=Array.isArray(state.catalog?.models)?state.catalog.models:[];return list.filter(item=>item.kind===state.kind)}
-  function renderModels(){models.innerHTML='';const list=availableModels();modelCount.textContent=list.length+' detected';if(!list.length){state.model=null;const box=document.createElement('div');box.className='empty-models';box.textContent=state.catalog?'No '+state.kind+' model ID was exposed by this Higgsfield account. Open Manage connection and re-test tools.':'Live catalog is still loading.';models.appendChild(box);generate.disabled=true;return}if(!list.some(item=>item.id===state.model))state.model=list[0].id;list.forEach(item=>{const button=document.createElement('button');button.type='button';button.className='model'+(item.id===state.model?' active':'');button.innerHTML='<b></b><small></small>';button.querySelector('b').textContent=item.name||item.id;button.querySelector('small').textContent=state.kind+' · live account';button.addEventListener('click',()=>{state.model=item.id;renderModels()});models.appendChild(button)});generate.disabled=false}
-  function setKind(kind){state.kind=kind;document.querySelectorAll('[data-kind]').forEach(btn=>btn.classList.toggle('active',btn.dataset.kind===kind));q('durationWrap').style.display=kind==='video'?'block':'none';q('audioWrap').style.display=kind==='video'?'flex':'none';generate.textContent='Generate '+kind;renderModels()}
-  document.querySelectorAll('[data-kind]').forEach(btn=>btn.addEventListener('click',()=>setKind(btn.dataset.kind)));
-  async function loadCatalog(){connection.className='status-pill';connectionText.textContent='Checking Higgsfield';try{const response=await fetch('/api/higgsfield/catalog',{credentials:'same-origin',cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||'Higgsfield catalog unavailable');state.catalog=data;connection.className='status-pill good';connectionText.textContent='Higgsfield connected';const total=(data.models||[]).length;catalogSummary.textContent=(data.tools||[]).length+' generation tools · '+total+' models';renderModels()}catch(error){state.catalog=null;connection.className='status-pill bad';connectionText.textContent='Connection required';catalogSummary.textContent='Live tools unavailable';models.innerHTML='<div class="empty-models">Connect or reconnect Higgsfield, then refresh this page.</div>';generate.disabled=true;setMessage(error.message||'Higgsfield connection failed.','bad')}}
-  function previewJob(job){if(!job){stage.innerHTML='<div class="empty"><div class="glyph">✦</div><strong>Your render appears here</strong><span>Choose a detected model and generate.</span></div>';return}stage.innerHTML='';if(job.outputUrl){const media=document.createElement(job.kind==='image'?'img':'video');media.src=job.outputUrl;if(job.kind==='video'){media.controls=true;media.playsInline=true;media.autoplay=false}stage.appendChild(media);return}const card=document.createElement('div');card.className='job-card';const status=safeText(job.status||'running');card.innerHTML='<span class="state"></span><h3></h3><p></p><div class="progress"><i></i></div>';card.querySelector('.state').textContent=status;card.querySelector('h3').textContent=(job.kind==='image'?'Image':'Video')+' generation '+status;card.querySelector('p').textContent=job.errorMessage||job.prompt||'Higgsfield is processing your request.';if(status==='failed')card.querySelector('.progress').style.display='none';stage.appendChild(card)}
-  function renderRecent(){recent.innerHTML='';if(!state.jobs.length){const d=document.createElement('div');d.className='empty-models';d.textContent='No generations yet.';recent.appendChild(d);return}state.jobs.slice(0,6).forEach(job=>{const button=document.createElement('button');button.type='button';button.innerHTML='<span><b></b><small></small></span><em></em>';button.querySelector('b').textContent=job.prompt||job.model;button.querySelector('small').textContent=(job.model||'model')+' · '+(job.createdAt||'');button.querySelector('em').textContent=job.status||'unknown';button.addEventListener('click',()=>{previewJob(job);if(['running','submitted'].includes(job.status))poll(job.id)});recent.appendChild(button)})}
-  async function loadHistory(){try{const response=await fetch('/api/higgsfield/history?limit=20',{credentials:'same-origin',cache:'no-store'});const data=await response.json().catch(()=>({}));if(response.ok){state.jobs=Array.isArray(data.jobs)?data.jobs:[];renderRecent();if(state.jobs[0])previewJob(state.jobs[0])}}catch{}}
-  async function refreshJob(id){const response=await fetch('/api/higgsfield/job/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||'Status refresh failed');const job=data.job;state.jobs=[job,...state.jobs.filter(item=>item.id!==job.id)];renderRecent();previewJob(job);return job}
-  function poll(id){clearInterval(state.poll);state.poll=setInterval(async()=>{try{const job=await refreshJob(id);if(['completed','failed'].includes(job.status)){clearInterval(state.poll);setMessage(job.status==='completed'?'Generation completed.':'Generation failed: '+(job.errorMessage||'Unknown provider error'),job.status==='completed'?'good':'bad')}}catch{}},7000)}
-  q('refresh').addEventListener('click',async()=>{await loadCatalog();await loadHistory()});
-  q('form').addEventListener('submit',async event=>{event.preventDefault();if(!state.model){setMessage('Choose an available model first.','bad');return}const prompt=q('prompt').value.trim();if(prompt.length<3){setMessage('Write a prompt first.','bad');return}generate.disabled=true;generate.textContent='Submitting…';setMessage('Sending generation to Higgsfield…');const reference=q('reference').value.trim();const seedValue=q('seed').value.trim();const payload={kind:state.kind,prompt,model:state.model,aspectRatio:q('aspect').value,resolution:q('resolution').value,duration:Number(q('duration').value),negativePrompt:q('negative').value.trim(),referenceUrls:reference?[reference]:[],generateAudio:q('audio').checked};if(seedValue!=='')payload.seed=Number(seedValue);try{const response=await fetch('/api/higgsfield/generate',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||'Generation request failed');const job=data.job;state.jobs=[job,...state.jobs.filter(item=>item.id!==job.id)];renderRecent();previewJob(job);setMessage(data.note||'Generation submitted.','good');if(['running','submitted'].includes(job.status))poll(job.id)}catch(error){setMessage(error.message||'Generation failed.','bad')}finally{generate.disabled=!state.model;generate.textContent='Generate '+state.kind}});
-  setKind('video');Promise.all([loadCatalog(),loadHistory()]);
-})();
-</script>
+  <header class="topbar">
+    <a class="logo" href="/" aria-label="Shazan AI Studio home">
+      <span class="logo-mark">S</span>
+      <span>Shazan AI Studio<small>Creative superconsole</small></span>
+    </a>
+    <nav class="topnav" aria-label="Studio navigation">
+      <button class="active" type="button" data-nav="explore">Explore</button>
+      <button type="button" data-nav="image">Image</button>
+      <button type="button" data-nav="video">Video</button>
+      <button type="button" data-nav="apps">Apps & Tools</button>
+      <button type="button" data-nav="gallery">Gallery</button>
+      <a href="/higgsfield-connect.html"><button type="button">Connection</button></a>
+    </nav>
+    <div class="account">
+      <div class="engine-state"><i></i><span id="engineText">Checking</span></div>
+      <div class="avatar">SK</div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="composer">
+      <div class="mode-tabs" role="group" aria-label="Generation mode">
+        <button class="active" type="button" data-kind="video">Create video</button>
+        <button type="button" data-kind="image">Create image</button>
+      </div>
+
+      <div class="reference-card">
+        <label for="referenceUrl">
+          <span class="ref-icon">▧</span>
+          <span><b>Add reference media</b><small>Paste a public HTTPS image or video URL</small></span>
+        </label>
+        <input id="referenceUrl" type="url" inputmode="url" placeholder="https://...">
+      </div>
+
+      <form id="generationForm">
+        <div class="field-title">Prompt <span><b id="promptCount">0</b>/6000</span></div>
+        <div class="prompt-wrap">
+          <textarea class="prompt" id="prompt" maxlength="6000" required placeholder="Describe the scene, movement, subject, lighting and emotion..."></textarea>
+          <button class="enhance" id="enhance" type="button">✦ Enhance</button>
+          <span class="count">Director prompt</span>
+        </div>
+
+        <div class="field-title">Model <span>Live Higgsfield catalog</span></div>
+        <select class="model-select" id="modelSelect" aria-label="Model selection"></select>
+
+        <div class="controls">
+          <div class="control"><label for="aspect">Aspect ratio</label><select id="aspect"><option value="9:16">9:16 Vertical</option><option value="16:9">16:9 Cinema</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Classic</option><option value="3:4">3:4 Portrait</option><option value="21:9">21:9 Ultra-wide</option></select></div>
+          <div class="control" id="durationControl"><label for="duration">Duration</label><select id="duration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option></select></div>
+          <div class="control full"><label for="resolution">Resolution</label><select id="resolution"><option value="720p">720p Fast</option><option value="1080p">1080p</option><option value="2k">2K</option><option value="4k">4K</option></select></div>
+        </div>
+
+        <label class="toggle-row" id="audioToggle"><span>Generate audio when supported</span><input id="audio" type="checkbox" checked></label>
+
+        <details class="advanced">
+          <summary>Advanced controls</summary>
+          <div class="advanced-body">
+            <input id="negative" maxlength="1500" placeholder="Negative prompt">
+            <input id="seed" type="number" inputmode="numeric" placeholder="Seed, leave empty for random">
+          </div>
+        </details>
+
+        <div class="generate-meta"><span>Billing<b>Connected Higgsfield credits</b></span><span>Secure OAuth<b>No API key exposed</b></span></div>
+        <button class="generate" id="generate" type="submit" disabled>Generate video</button>
+        <p class="message" id="message" role="status"></p>
+      </form>
+    </aside>
+
+    <section class="workspace">
+      <div class="workspace-head">
+        <div><h1>Connected creative catalog</h1><p>Real models for generation. The rest of your MCP inventory lives under Apps & Tools.</p></div>
+        <div class="metrics"><span class="metric" id="metricTools"><b>0</b> MCP tools</span><span class="metric" id="metricEngines"><b>0</b> generation engines</span><span class="metric acid" id="metricModels"><b>0</b> selectable models</span></div>
+      </div>
+
+      <div class="output-strip">
+        <div class="output-visual" id="outputVisual"><span>✦</span></div>
+        <div class="output-copy"><b id="outputTitle">Ready for your first render</b><p id="outputCopy">Choose a connected model, write the prompt and generate.</p></div>
+        <span class="output-status" id="outputStatus">Idle</span>
+      </div>
+
+      <div class="view-tabs">
+        <button class="active" type="button" data-view="models">Models</button>
+        <button type="button" data-view="apps">Apps & Tools</button>
+        <button type="button" data-view="jobs">Generations</button>
+        <button id="refreshCatalog" type="button">Refresh ↻</button>
+      </div>
+
+      <section class="panel-view active" id="view-models">
+        <div class="section-top"><div><h2 id="modelHeading">Video models</h2><span id="modelSubheading" style="color:#737b77;font-size:9px">Loading connected catalog</span></div><div class="filters"><button class="active" type="button">All</button><button type="button">Connected</button><button type="button">Audio</button></div></div>
+        <div class="model-grid" id="modelGrid"></div>
+      </section>
+
+      <section class="panel-view" id="view-apps">
+        <div class="section-top"><div><h2>MCP Apps & Tools</h2><span style="color:#737b77;font-size:9px">Marketing, media, analysis, 3D, web and utility capabilities</span></div></div>
+        <div class="apps-toolbar"><input class="apps-search" id="appsSearch" placeholder="Search connected MCP tools"><span class="apps-count" id="appsCount">0 tools</span></div>
+        <div class="apps-grid" id="appsGrid"></div>
+      </section>
+
+      <section class="panel-view" id="view-jobs">
+        <div class="section-top"><div><h2>Generation history</h2><span style="color:#737b77;font-size:9px">Active, completed and failed jobs</span></div></div>
+        <div class="jobs-list" id="jobsList"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/studio-v3.js?v=9" defer></script>
 </body>
 </html>
