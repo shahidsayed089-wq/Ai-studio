@@ -1,7 +1,7 @@
 import { exchangeAuthorizationCode } from '../../../_lib/higgsfield.js';
 
 function redirect(origin, params) {
-  const url = new URL('/higgsfield-connect.html', origin);
+  const url = new URL('/', origin);
   for (const [key, value] of Object.entries(params)) {
     if (value != null) url.searchParams.set(key, String(value).slice(0, 240));
   }
