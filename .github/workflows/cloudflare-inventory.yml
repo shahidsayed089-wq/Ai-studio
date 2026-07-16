@@ -1,0 +1,87 @@
+name: Audit existing Cloudflare Pages wiring
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cloudflare-inventory.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read sanitized Pages configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
+            > /tmp/pages-projects.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/pages-projects.json').read_text())
+          if not payload.get('success'):
+              raise SystemExit('Cloudflare Pages inventory request failed')
+
+          lines = [
+              '# Existing Cloudflare Pages inventory',
+              '',
+              'This report contains project and binding names only. It does not contain secret values.',
+              '',
+          ]
+
+          projects = payload.get('result') or []
+          for project in sorted(projects, key=lambda item: item.get('name', '')):
+              prod = ((project.get('deployment_configs') or {}).get('production') or {})
+              source = project.get('source') or {}
+              source_config = source.get('config') or {}
+              def keys(name):
+                  value = prod.get(name) or {}
+                  return sorted(value.keys()) if isinstance(value, dict) else []
+
+              lines.extend([
+                  f"## {project.get('name', 'unnamed')}",
+                  f"- Subdomain: {project.get('subdomain') or 'none'}",
+                  f"- Production branch: {project.get('production_branch') or 'unknown'}",
+                  f"- Source type: {source.get('type') or 'direct-upload'}",
+                  f"- Source repository: {source_config.get('repo_name') or source_config.get('repo') or 'none'}",
+                  f"- Uses Functions: {bool(project.get('uses_functions'))}",
+                  f"- D1 bindings: {', '.join(keys('d1_databases')) or 'none'}",
+                  f"- R2 bindings: {', '.join(keys('r2_buckets')) or 'none'}",
+                  f"- KV bindings: {', '.join(keys('kv_namespaces')) or 'none'}",
+                  f"- Environment variable keys: {', '.join(keys('env_vars')) or 'none'}",
+                  '',
+              ])
+
+          Path('CLOUDFLARE_INVENTORY.md').write_text('\n'.join(lines), encoding='utf-8')
+          PY
+
+      - name: Commit sanitized inventory
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CLOUDFLARE_INVENTORY.md
+          if git diff --cached --quiet; then
+            echo "Inventory unchanged"
+            exit 0
+          fi
+          git commit -m "Record Cloudflare Pages inventory [skip ci]"
+          git push
