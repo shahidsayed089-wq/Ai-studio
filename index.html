@@ -3,116 +3,138 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#080909">
-  <meta name="description" content="Shazan AI Studio, a cinematic multi-model creation workspace powered by a connected Higgsfield account.">
-  <title>Shazan AI Studio</title>
-  <link rel="stylesheet" href="/studio-v3.css?v=9">
+  <meta name="theme-color" content="#070605">
+  <meta name="description" content="Shazan AI Studio powered by Yagna Engine, an ember-gold cinematic creation forge connected to Higgsfield MCP.">
+  <title>Yagna Engine | Shazan AI Studio</title>
+  <link rel="stylesheet" href="/yagna.css?v=12">
 </head>
 <body>
+  <div class="ember-field" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
   <header class="topbar">
-    <a class="logo" href="/" aria-label="Shazan AI Studio home">
-      <span class="logo-mark">S</span>
-      <span>Shazan AI Studio<small>Creative superconsole</small></span>
+    <a class="brand" href="/" aria-label="Yagna Engine home">
+      <span class="brand-mark"></span>
+      <span><strong>Shazan AI Studio</strong><small>Powered by Yagna Engine</small></span>
     </a>
+
     <nav class="topnav" aria-label="Studio navigation">
-      <button class="active" type="button" data-nav="explore">Explore</button>
-      <button type="button" data-nav="image">Image</button>
-      <button type="button" data-nav="video">Video</button>
-      <button type="button" data-nav="apps">Apps & Tools</button>
-      <button type="button" data-nav="gallery">Gallery</button>
-      <a href="/higgsfield-connect.html"><button type="button">Connection</button></a>
+      <button class="active" type="button" data-nav-kind="video">Video Forge</button>
+      <button type="button" data-nav-kind="image">Image Forge</button>
+      <button type="button" data-nav-view="models">Engines</button>
+      <button type="button" data-nav-view="apps">Yagna Forge</button>
+      <button type="button" data-nav-view="jobs">Renders</button>
+      <a href="/higgsfield-connect.html">Connection</a>
     </nav>
+
     <div class="account">
-      <div class="engine-state"><i></i><span id="engineText">Checking</span></div>
+      <div class="engine-state"><i></i><span id="engineText">Yagna checking</span></div>
       <div class="avatar">SK</div>
     </div>
   </header>
 
   <main class="shell">
-    <aside class="composer">
+    <aside class="forge">
+      <section class="engine-banner">
+        <header>
+          <div style="display:flex;align-items:center;gap:10px"><span class="sigil">Y</span><div><b>Yagna Engine</b><small>Connected creation layer</small></div></div>
+          <span class="live-chip">LIVE</span>
+        </header>
+        <p>One cinematic console over your Higgsfield account. Genuine generation models stay in the forge. Every other MCP capability lives in Yagna Forge.</p>
+      </section>
+
       <div class="mode-tabs" role="group" aria-label="Generation mode">
-        <button class="active" type="button" data-kind="video">Create video</button>
-        <button type="button" data-kind="image">Create image</button>
+        <button class="active" type="button" data-kind="video">Motion</button>
+        <button type="button" data-kind="image">Still</button>
       </div>
 
       <div class="reference-card">
-        <label for="referenceUrl">
-          <span class="ref-icon">▧</span>
-          <span><b>Add reference media</b><small>Paste a public HTTPS image or video URL</small></span>
-        </label>
+        <label for="referenceUrl"><span class="ref-icon">▧</span><span><b>Reference media</b><small>Public HTTPS image or video URL</small></span></label>
         <input id="referenceUrl" type="url" inputmode="url" placeholder="https://...">
       </div>
 
       <form id="generationForm">
-        <div class="field-title">Prompt <span><b id="promptCount">0</b>/6000</span></div>
+        <div class="field-title">Direction <span><b id="promptCount">0</b>/6000</span></div>
         <div class="prompt-wrap">
-          <textarea class="prompt" id="prompt" maxlength="6000" required placeholder="Describe the scene, movement, subject, lighting and emotion..."></textarea>
-          <button class="enhance" id="enhance" type="button">✦ Enhance</button>
+          <textarea class="prompt" id="prompt" maxlength="6000" required placeholder="Direct the scene, motion, lens, lighting, performance and atmosphere..."></textarea>
+          <button class="enhance" id="enhance" type="button">✦ Yagna polish</button>
           <span class="count">Director prompt</span>
         </div>
 
-        <div class="field-title">Model <span>Live Higgsfield catalog</span></div>
-        <select class="model-select" id="modelSelect" aria-label="Model selection"></select>
+        <div class="field-title">Engine <span>Live MCP schema</span></div>
+        <select class="model-select" id="modelSelect" aria-label="Generation model"></select>
 
         <div class="controls">
-          <div class="control"><label for="aspect">Aspect ratio</label><select id="aspect"><option value="9:16">9:16 Vertical</option><option value="16:9">16:9 Cinema</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Classic</option><option value="3:4">3:4 Portrait</option><option value="21:9">21:9 Ultra-wide</option></select></div>
+          <div class="control"><label for="aspect">Frame</label><select id="aspect"><option value="9:16">9:16 Vertical</option><option value="16:9">16:9 Cinema</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Classic</option><option value="3:4">3:4 Portrait</option><option value="21:9">21:9 Ultra-wide</option></select></div>
           <div class="control" id="durationControl"><label for="duration">Duration</label><select id="duration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option></select></div>
           <div class="control full"><label for="resolution">Resolution</label><select id="resolution"><option value="720p">720p Fast</option><option value="1080p">1080p</option><option value="2k">2K</option><option value="4k">4K</option></select></div>
         </div>
 
-        <label class="toggle-row" id="audioToggle"><span>Generate audio when supported</span><input id="audio" type="checkbox" checked></label>
+        <label class="toggle-row" id="audioToggle"><span>Native audio when supported</span><input id="audio" type="checkbox" checked></label>
 
         <details class="advanced">
-          <summary>Advanced controls</summary>
+          <summary>Advanced direction</summary>
           <div class="advanced-body">
             <input id="negative" maxlength="1500" placeholder="Negative prompt">
-            <input id="seed" type="number" inputmode="numeric" placeholder="Seed, leave empty for random">
+            <input id="seed" type="number" inputmode="numeric" placeholder="Seed, empty for random">
           </div>
         </details>
 
-        <div class="generate-meta"><span>Billing<b>Connected Higgsfield credits</b></span><span>Secure OAuth<b>No API key exposed</b></span></div>
-        <button class="generate" id="generate" type="submit" disabled>Generate video</button>
+        <div class="generate-meta"><span>Billing<b>Higgsfield credits</b></span><span>Security<b>Encrypted OAuth</b></span></div>
+        <button class="generate" id="generate" type="submit" disabled>Ignite video</button>
         <p class="message" id="message" role="status"></p>
       </form>
     </aside>
 
-    <section class="workspace">
-      <div class="workspace-head">
-        <div><h1>Connected creative catalog</h1><p>Real models for generation. The rest of your MCP inventory lives under Apps & Tools.</p></div>
-        <div class="metrics"><span class="metric" id="metricTools"><b>0</b> MCP tools</span><span class="metric" id="metricEngines"><b>0</b> generation engines</span><span class="metric acid" id="metricModels"><b>0</b> selectable models</span></div>
+    <section class="studio">
+      <div class="studio-head">
+        <div><span class="kicker">EMBER-GOLD CREATION SYSTEM</span><h1>Turn intent into <span>cinematic matter.</span></h1></div>
+        <div class="metrics"><span class="metric" id="metricTools"><b>0</b> MCP tools</span><span class="metric" id="metricEngines"><b>0</b> forge routes</span><span class="metric hot" id="metricModels"><b>0</b> true models</span></div>
       </div>
 
-      <div class="output-strip">
-        <div class="output-visual" id="outputVisual"><span>✦</span></div>
-        <div class="output-copy"><b id="outputTitle">Ready for your first render</b><p id="outputCopy">Choose a connected model, write the prompt and generate.</p></div>
-        <span class="output-status" id="outputStatus">Idle</span>
-      </div>
+      <section class="stage">
+        <div class="stage-copy">
+          <span class="engine-tag"><i></i><span id="stageKind">Motion forge</span></span>
+          <h2>Yagna turns a prompt into a production decision.</h2>
+          <p>Direct genuine connected models through one original filmmaking interface, without exposing provider tokens to the browser.</p>
+        </div>
+        <span class="stage-status" id="outputStatus">Yagna idle</span>
+        <div class="stage-output" id="outputVisual"><div class="empty-flame">♨</div></div>
+        <div class="output-caption"><b id="outputTitle">The forge is ready</b><p id="outputCopy">Choose an engine, write the direction and ignite a render.</p></div>
+      </section>
 
       <div class="view-tabs">
-        <button class="active" type="button" data-view="models">Models</button>
-        <button type="button" data-view="apps">Apps & Tools</button>
-        <button type="button" data-view="jobs">Generations</button>
+        <button class="active" type="button" data-view="models">Engines</button>
+        <button type="button" data-view="apps">Yagna Forge</button>
+        <button type="button" data-view="jobs">Render Vault</button>
         <button id="refreshCatalog" type="button">Refresh ↻</button>
       </div>
 
       <section class="panel-view active" id="view-models">
-        <div class="section-top"><div><h2 id="modelHeading">Video models</h2><span id="modelSubheading" style="color:#737b77;font-size:9px">Loading connected catalog</span></div><div class="filters"><button class="active" type="button">All</button><button type="button">Connected</button><button type="button">Audio</button></div></div>
+        <div class="section-top"><div><h2 id="modelHeading">Motion engines</h2><span id="modelSubheading">Loading genuine connected models</span></div><div class="filters"><button class="active" type="button">Connected</button><button type="button">MCP</button></div></div>
         <div class="model-grid" id="modelGrid"></div>
       </section>
 
       <section class="panel-view" id="view-apps">
-        <div class="section-top"><div><h2>MCP Apps & Tools</h2><span style="color:#737b77;font-size:9px">Marketing, media, analysis, 3D, web and utility capabilities</span></div></div>
-        <div class="apps-toolbar"><input class="apps-search" id="appsSearch" placeholder="Search connected MCP tools"><span class="apps-count" id="appsCount">0 tools</span></div>
+        <div class="section-top"><div><h2>Yagna Forge</h2><span id="forgeCount">Connected MCP capabilities</span></div></div>
+        <div class="filters" id="categoryFilters" style="margin-bottom:10px;overflow:auto"></div>
+        <div class="apps-toolbar"><input class="apps-search" id="appsSearch" placeholder="Search tools, media, marketing, 3D, analysis..."><span class="apps-count" id="appsCount">0 tools</span></div>
         <div class="apps-grid" id="appsGrid"></div>
       </section>
 
       <section class="panel-view" id="view-jobs">
-        <div class="section-top"><div><h2>Generation history</h2><span style="color:#737b77;font-size:9px">Active, completed and failed jobs</span></div></div>
+        <div class="section-top"><div><h2>Render Vault</h2><span>Active, completed and failed generations</span></div></div>
         <div class="jobs-list" id="jobsList"></div>
       </section>
     </section>
   </main>
 
-  <script src="/studio-v3.js?v=9" defer></script>
+  <nav class="mobile-dock" aria-label="Mobile navigation">
+    <button class="active" type="button" data-dock="create"><span>♨</span>Create</button>
+    <button type="button" data-dock="models"><span>◇</span>Engines</button>
+    <button type="button" data-dock="apps"><span>✦</span>Forge</button>
+    <button type="button" data-dock="jobs"><span>▣</span>Vault</button>
+  </nav>
+
+  <script src="/yagna.js?v=12" defer></script>
 </body>
 </html>
