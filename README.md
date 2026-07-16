@@ -1,6 +1,6 @@
 # SHAZAN AI Studio
 
-Premium multi-model generative AI studio built with Next.js, Vinext and Cloudflare Pages.
+Premium multi-model generative AI studio built with Next.js static export and Cloudflare Pages.
 
 ## Local development
 
@@ -22,7 +22,7 @@ npm run build
 
 ## Deploy to Cloudflare Pages
 
-The production build generates the static website, including `index.html`, in `dist/client`.
+The production build generates the static website, including `index.html`, in `out`.
 The checked-in `wrangler.jsonc` pins that output directory to the `ai-studio-1n1` Pages project.
 
 ```bash
@@ -33,7 +33,7 @@ For the `ai-studio-1n1` Cloudflare Pages project connected to this repository:
 
 - Production branch: `main`
 - Build command: `npm run build`
-- Build output directory: `dist/client`
+- Build output directory: `out`
 - Node version: `22`
 
 Add these under **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** when the server-side Pages Function is connected:

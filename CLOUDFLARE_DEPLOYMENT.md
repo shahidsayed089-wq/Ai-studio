@@ -1,6 +1,6 @@
 # Cloudflare deployment
 
-This repository is configured for the existing `ai-studio-1n1` Cloudflare Pages project through Vinext static export.
+This repository is configured for the existing `ai-studio-1n1` Cloudflare Pages project through Next.js static export.
 
 ## Connect the repository
 
@@ -8,7 +8,7 @@ This repository is configured for the existing `ai-studio-1n1` Cloudflare Pages 
 2. Open **Settings → Builds & deployments**.
 3. Select production branch `main`.
 4. Set the build command to `npm run build`.
-5. Set the build output directory to `dist/client`.
+5. Set the build output directory to `out`.
 6. Use Node.js 22 and save the configuration.
 7. Retry the latest deployment.
 
