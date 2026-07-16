@@ -1,4 +1,4 @@
-name: Deploy Yagna AI Studio to Cloudflare Pages
+name: Deploy Shazan AI Studio to Cloudflare Pages
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - main
     paths-ignore:
       - DEPLOYMENT_STATUS.md
+      - CLOUDFLARE_INVENTORY.md
   workflow_dispatch:
 
 permissions:
@@ -18,14 +19,14 @@ concurrency:
 
 jobs:
   deploy:
-    name: Validate and deploy
+    name: Validate and deploy live AI
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_PROJECT_NAME: shazan-yagna-studio
-      PRODUCTION_URL: https://shazan-yagna-studio.pages.dev
+      CLOUDFLARE_PROJECT_NAME: ai-studio
+      PRODUCTION_URL: https://ai-studio-1n1.pages.dev
 
     steps:
       - name: Checkout repository
@@ -41,38 +42,52 @@ jobs:
         run: |
           if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
             echo "Cloudflare credentials are not configured."
-            echo "Add GitHub Actions secrets named CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
             exit 1
           fi
 
       - name: Validate application
         run: npm run build
 
-      - name: Create clean Pages project if needed
-        continue-on-error: true
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create shazan-yagna-studio --production-branch=main
+      - name: Validate browser bridge syntax
+        run: node --check seedance-bridge.js
 
-      - name: Deploy Yagna production site
+      - name: Deploy to existing wired Pages project
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy . --project-name=shazan-yagna-studio --branch=main --commit-dirty=true
+          command: pages deploy . --project-name=ai-studio --branch=main --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify live Yagna homepage
+      - name: Verify live UI and AI bindings
         shell: bash
         run: |
           verified=0
           for attempt in $(seq 1 18); do
             echo "Verification attempt $attempt"
+            home_ok=0
+            bridge_ok=0
+            api_ok=0
+
             if curl --fail --silent --show-error --location --max-time 20 \
               "$PRODUCTION_URL/?verify=${GITHUB_SHA}-${attempt}" \
               | grep -Fq "Shazan AI Studio | Yagna Engine"; then
+              home_ok=1
+            fi
+
+            if curl --fail --silent --show-error --location --max-time 20 \
+              "$PRODUCTION_URL/create.html?verify=${GITHUB_SHA}-${attempt}" \
+              | grep -Fq "seedance-bridge.js"; then
+              bridge_ok=1
+            fi
+
+            if curl --fail --silent --show-error --location --max-time 20 \
+              "$PRODUCTION_URL/api/health?verify=${GITHUB_SHA}-${attempt}" \
+              | grep -Eq '"seedance2Api"[[:space:]]*:[[:space:]]*true'; then
+              api_ok=1
+            fi
+
+            if [[ "$home_ok" == "1" && "$bridge_ok" == "1" && "$api_ok" == "1" ]]; then
               verified=1
               break
             fi
@@ -80,7 +95,7 @@ jobs:
           done
 
           if [[ "$verified" != "1" ]]; then
-            echo "The live Pages domain did not serve the Yagna homepage."
+            echo "Live UI or Seedance API health verification failed."
             exit 1
           fi
 
@@ -90,15 +105,17 @@ jobs:
           cat > DEPLOYMENT_STATUS.md <<EOF
           # Verified Cloudflare Deployment
 
-          - Status: verified
+          - Status: live AI verified
           - URL: $PRODUCTION_URL
+          - Create URL: $PRODUCTION_URL/create.html
           - Source commit: $GITHUB_SHA
           - Verified at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
-          - Expected homepage: Shazan AI Studio | Yagna Engine
+          - Seedance API health: ready
+          - D1/R2/secrets: inherited from existing ai-studio project
           EOF
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add DEPLOYMENT_STATUS.md
-          git commit -m "Record verified Cloudflare deployment [skip ci]" || exit 0
+          git commit -m "Record verified live AI deployment [skip ci]" || exit 0
           git push
