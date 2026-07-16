@@ -5,8 +5,8 @@ import {
   callHiggsfieldTool,
   extractToolResult,
   findMediaImportTool,
-  selectGenerationTool,
 } from '../../_lib/higgsfield-tools.js';
+import { selectGenerationTool } from '../../_lib/higgsfield-detect.js';
 import { createHiggsfieldJob, updateHiggsfieldJob } from '../../_lib/higgsfield-jobs.js';
 import { resolveWalletUser, walletErrorResponse, walletResponse, WalletError } from '../../_lib/wallet.js';
 
@@ -44,7 +44,7 @@ export async function onRequestPost({ request, env }) {
       throw new WalletError('invalid_prompt', 'Prompt must be between 3 and 6000 characters.', 400);
     }
 
-    const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : (kind === 'image' ? 'gpt-image-2' : 'seedance-2.0');
+    const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : (kind === 'image' ? 'gpt_image_2' : 'seedance_2_0');
     const aspectRatio = ASPECTS.has(body.aspectRatio) ? body.aspectRatio : '9:16';
     const resolution = RESOLUTIONS.has(body.resolution) ? body.resolution : '720p';
     const durationNumber = Number(body.duration);
