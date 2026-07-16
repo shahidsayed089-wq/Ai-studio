@@ -1,5 +1,5 @@
 import { ensurePaymentSchema, verifyRazorpayWebhook } from '../../../_lib/razorpay.js';
-import { ensureWallet, walletResponse } from '../../../_lib/wallet.js';
+import { ensureWallet, topUpWalletOnce, walletResponse } from '../../../_lib/wallet.js';
 
 export async function onRequestPost({ request, env }) {
   const secret = String(env.RAZORPAY_WEBHOOK_SECRET || '').trim();
@@ -63,20 +63,19 @@ export async function onRequestPost({ request, env }) {
   }
 
   await ensureWallet(env.DB, purchase.user_id);
-  const topupId = `razorpay:${orderId}`;
-  await env.DB.batch([
-    env.DB.prepare(
-      `UPDATE credit_purchases
-       SET razorpay_payment_id = ?, status = 'credited', updated_at = CURRENT_TIMESTAMP
-       WHERE razorpay_order_id = ? AND status IN ('creating','created')`,
-    ).bind(paymentId, orderId),
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO wallet_topups (id, user_id, amount, note)
-       SELECT ?, user_id, credits, ?
-       FROM credit_purchases
-       WHERE razorpay_order_id = ? AND status = 'credited'`,
-    ).bind(topupId, `Razorpay purchase · ${purchase.package_id}`, orderId),
-  ]);
+  await env.DB.prepare(
+    `UPDATE credit_purchases
+     SET razorpay_payment_id = ?, status = 'credited', updated_at = CURRENT_TIMESTAMP
+     WHERE razorpay_order_id = ? AND status IN ('creating','created','credited')`,
+  ).bind(paymentId, orderId).run();
+
+  await topUpWalletOnce(
+    env.DB,
+    purchase.user_id,
+    Number(purchase.credits),
+    `Razorpay purchase · ${purchase.package_id}`,
+    `razorpay:${orderId}`,
+  );
 
   return walletResponse({ ok: true, credited: Number(purchase.credits), orderId });
 }
