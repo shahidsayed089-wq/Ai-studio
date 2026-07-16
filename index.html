@@ -3,191 +3,191 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#090806">
-  <meta name="description" content="Shazan AI Studio is a cinematic creation platform powered by Yagna Engine for video, image, audio and generative workflows.">
+  <meta name="theme-color" content="#050812">
+  <meta name="description" content="Shazan AI Studio is a complete AI creative platform powered by Yagna Engine for video, image, animation, audio and production workflows.">
   <title>Shazan AI Studio | Yagna Engine</title>
   <link rel="preconnect" href="https://images.unsplash.com">
-  <link rel="stylesheet" href="/studio-home.css?v=20260717-grand">
+  <link rel="stylesheet" href="/studio-home.css?v=20260717-platform">
 </head>
 <body>
-<div class="site-shell">
-  <header class="topbar">
-    <a class="brand" href="/" aria-label="Shazan AI Studio home">
-      <span class="brand-sigil"><i></i></span>
-      <span class="brand-copy"><b>Shazan AI Studio</b><small>Yagna Engine</small></span>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="/">
+      <span class="brand-mark"><i>Y</i></span>
+      <span class="brand-copy"><b>Shazan AI</b><small>Yagna Creative Studio</small></span>
     </a>
 
-    <nav class="category-nav" aria-label="Creation categories">
-      <a href="#hubs">Creation Hubs</a>
-      <a class="active" href="/create.html?kind=video">Cinematic Video</a>
-      <a href="/create.html?kind=image">Art &amp; Image</a>
-      <a href="/open-studio.html">Audio</a>
-      <a href="#forge">Yagna Forge</a>
-      <a href="/open-studio.html">Plugins &amp; API</a>
+    <nav class="side-nav" aria-label="Main navigation">
+      <a class="nav-link active" href="/"><span>⌂</span>Home</a>
+      <a class="nav-link" href="/create.html?kind=video"><span>▹</span>AI Video</a>
+      <a class="nav-link" href="/create.html?kind=image"><span>▧</span>AI Image</a>
+      <a class="nav-link" href="/open-studio.html"><span>◇</span>AI Animation</a>
+      <a class="nav-link" href="/open-studio.html"><span>◉</span>AI Voices</a>
+      <a class="nav-link" href="#tools"><span>⌘</span>AI Tools</a>
+      <div class="nav-divider"></div>
+      <a class="nav-link" href="#academy"><span>◇</span>Academy</a>
+      <a class="nav-link" href="#community"><span>◌</span>Community</a>
+      <a class="nav-link" href="#featured"><span>◍</span>Inspiration</a>
+      <a class="nav-link" href="/create.html#view-jobs"><span>▱</span>Projects</a>
+      <a class="nav-link" href="/create.html"><span>▤</span>Assets</a>
+      <a class="nav-link" href="#categories"><span>▦</span>Templates</a>
+      <a class="nav-link" href="/open-studio.html"><span>⌘</span>Apps &amp; Plugins</a>
     </nav>
 
-    <div class="top-actions">
-      <div class="status-pill"><i></i><span id="homeStatusText">Studio ready</span></div>
-      <a class="credits" id="homeCredits" href="/owner.html">Credits</a>
-      <div class="avatar">SK</div>
+    <div class="sidebar-bottom">
+      <div class="profile-card">
+        <div class="mini-avatar">SK</div>
+        <div><b>Creative Studio</b><span>Yagna Pro</span></div>
+        <em>PRO</em>
+      </div>
+      <div class="credit-card">
+        <div class="credit-top"><span>Credits available</span><a href="/owner.html">↗</a></div>
+        <strong id="sideCredits">Loading…</strong>
+        <div class="credit-track"><i id="creditProgress"></i></div>
+        <a class="upgrade" href="/owner.html">Manage credits</a>
+      </div>
+      <a class="max-card" href="/open-studio.html">
+        <span>YAGNA MAX</span><b>200+ model universe</b><small>Image, video, audio, lip sync and workflows</small><em>Open Studio</em>
+      </a>
     </div>
-  </header>
+  </aside>
 
-  <main>
-    <section class="hero" aria-label="Yagna cinematic studio">
-      <div class="hero-mosaic" aria-hidden="true">
-        <figure class="mosaic-panel panel-city"><img src="https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1000&q=88" alt=""></figure>
-        <figure class="mosaic-panel panel-world"><img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1000&q=88" alt=""></figure>
-        <figure class="mosaic-panel panel-orbit"><img src="https://images.unsplash.com/photo-1454789548928-9efd52dc4031?auto=format&fit=crop&w=1000&q=88" alt=""></figure>
-        <figure class="mosaic-panel panel-portrait"><img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=1000&q=88" alt=""></figure>
-        <figure class="mosaic-panel panel-desert"><img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=88" alt=""></figure>
+  <main class="main">
+    <header class="topbar">
+      <button class="menu-button" id="menuButton" type="button" aria-label="Open navigation">☰</button>
+      <label class="search-box">
+        <span>⌕</span>
+        <input id="globalSearch" type="search" placeholder="Search tools, templates, models…">
+        <kbd>⌘ K</kbd>
+      </label>
+      <div class="top-actions">
+        <div class="live-chip"><i></i><span id="homeStatusText">Studio online</span></div>
+        <a class="create-button" href="/create.html"><span>＋</span>Create</a>
+        <a class="icon-button" href="/create.html#view-jobs" aria-label="Notifications">♧</a>
+        <div class="avatar">SK</div>
       </div>
+    </header>
 
-      <div class="hero-vignette"></div>
-      <div class="hero-card">
-        <span class="hero-kicker">THE YAGNA STUDIO</span>
-        <h1>Cinematic AI for<br><strong>world-scale creation.</strong></h1>
-        <p>Direct films, images, characters, audio and multi-model workflows from one original production universe.</p>
-        <div class="hero-actions">
-          <a class="gold-button" href="/create.html?kind=video">Enter Studio</a>
-          <a class="glass-button" href="/open-studio.html">Open 200+ Model Lab</a>
-        </div>
-      </div>
-      <div class="hero-stats">
-        <span><b>Video</b> Direction</span>
-        <span><b>Image</b> Worlds</span>
-        <span><b>Audio</b> Performance</span>
-        <span><b>Forge</b> Workflows</span>
-      </div>
-    </section>
-
-    <section class="hubs section-wrap" id="hubs">
-      <article class="hub-card video-hub">
-        <header class="hub-head">
-          <div><span class="hub-label">CREATION HUB <em>NEW</em></span><h2>Grand Video<br>Generator</h2></div>
-          <a href="/create.html?kind=video">Open hub ↗</a>
-        </header>
-        <div class="timeline-demo" aria-label="Illustrative cinematic timeline">
-          <div class="timeline-top"><span>Prompt</span><span>◀</span><span>▶</span><span>00:00:12</span></div>
-          <div class="ruler"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          <div class="timeline-row"><b>1</b><span>Hero plate</span><div class="clip clip-photo"><i></i><i></i><i></i><i></i></div></div>
-          <div class="timeline-row"><b>2</b><span>Director prompt</span><div class="clip clip-purple">Rain-soaked pursuit · low tracking</div></div>
-          <div class="timeline-row"><b>3</b><span>Performance</span><div class="clip clip-cyan">Grounded acceleration</div></div>
-          <div class="timeline-row"><b>4</b><span>World layer</span><div class="clip clip-green">Dubai tunnel atmosphere</div></div>
-          <div class="timeline-row"><b>5</b><span>Camera</span><div class="clip clip-gold">15s continuous movement</div></div>
-          <div class="playhead"></div>
-        </div>
-        <p>Direct multi-shot cinematic ideas, references and model routes through one production-ready workspace.</p>
-      </article>
-
-      <article class="hub-card image-hub">
-        <header class="hub-head">
-          <div><span class="hub-label">CREATION HUB <em>NEW</em></span><h2>Large-Scale Image &amp;<br>Texture Generator</h2></div>
-          <a href="/create.html?kind=image">Open hub ↗</a>
-        </header>
-        <div class="texture-lab">
-          <div class="texture-column">
-            <img src="https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=500&q=80" alt="Neon city texture">
-            <img src="https://images.unsplash.com/photo-1504198453319-5ce911bafcde?auto=format&fit=crop&w=500&q=80" alt="Rock texture">
-            <img src="https://images.unsplash.com/photo-1518895949257-7621c3c786d7?auto=format&fit=crop&w=500&q=80" alt="Organic texture">
+    <div class="content">
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">✦ NEXT-GEN AI CREATIVE SUITE</span>
+          <h1>The future of<br><strong>AI Creative Generation</strong></h1>
+          <p>Generate cinematic videos, images, animation, voices and production assets with connected AI models. One studio from idea to final frame.</p>
+          <div class="hero-actions">
+            <a class="primary-button" href="/create.html?kind=video"><span>▷</span>Create AI Video</a>
+            <a class="secondary-button" href="/create.html?kind=image"><span>▧</span>Create AI Image</a>
           </div>
-          <div class="character-grid">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=500&q=82" alt="Female character portrait">
-            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=82" alt="Male character portrait">
-            <img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=82" alt="Cinematic character portrait">
-            <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=500&q=82" alt="Editorial character portrait">
-            <img src="https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=500&q=82" alt="Character study">
-            <img src="https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=500&q=82" alt="Portrait concept">
-          </div>
+          <div class="trust-row"><span>◉ Ultra HD output</span><span>ϟ Fast generation</span><span>◇ Commercial workflows</span><span>◈ Private studio</span></div>
         </div>
-        <p>Develop characters, key art, campaign frames and high-resolution visual surfaces for ambitious productions.</p>
-      </article>
-    </section>
-
-    <section class="projects section-wrap" id="projects">
-      <div class="section-title">
-        <div><span>EXPLORE PROJECT DEPTH</span><h2>See the worlds, prompts and production thinking.</h2></div>
-        <a href="/create.html#view-jobs">Open Render Vault ↗</a>
-      </div>
-
-      <div class="project-grid">
-        <a class="project-card project-wide" href="/create.html?kind=video">
-          <img src="https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=84" alt="Cinematic masterclass">
-          <div class="project-overlay"><span>YAGNA ORIGINAL</span><h3>Master AI Filmmaking</h3><p>Shot logic, performance and cinematic scale.</p></div>
-        </a>
-        <a class="project-card" href="/create.html?kind=image">
-          <img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=900&q=84" alt="Anime production artwork">
-          <div class="project-overlay"><span>ART &amp; IMAGE</span><h3>Anime Production</h3><p>Characters, boards and final frames.</p></div>
-        </a>
-        <a class="project-card" href="/create.html?kind=video">
-          <img src="https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=900&q=84" alt="Epic riders in snow">
-          <div class="project-overlay"><span>CINEMATIC VIDEO</span><h3>Wolf Banner</h3><p>Atmosphere, scale and narrative motion.</p></div>
-        </a>
-        <a class="project-card" href="/open-studio.html">
-          <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=84" alt="Dark fantasy portrait">
-          <div class="project-overlay"><span>CHARACTER</span><h3>Nocturne Identity</h3><p>Face, wardrobe and visual continuity.</p></div>
-        </a>
-        <a class="project-card" href="/create.html?kind=video">
-          <img src="https://images.unsplash.com/photo-1518391846015-55a9cc003b25?auto=format&fit=crop&w=900&q=84" alt="Dramatic cinematic scene">
-          <div class="project-overlay"><span>DIRECTOR MODE</span><h3>Red City Sequence</h3><p>Multi-shot pacing and emotional geography.</p></div>
-        </a>
-        <a class="project-card project-wide" href="/open-studio.html">
-          <img src="https://images.unsplash.com/photo-1614728263952-84ea256f9679?auto=format&fit=crop&w=1200&q=84" alt="Space exploration project">
-          <div class="project-overlay"><span>SUPERCOMPUTER</span><h3>Seedance 2.0 in 4K</h3><p>Reference control, texture and long-form visual logic.</p></div>
-        </a>
-      </div>
-      <div class="community-row"><a class="community-button" href="/open-studio.html">Explore Creative Universe ↗</a></div>
-    </section>
-
-    <section class="challenge" id="forge">
-      <div class="challenge-glow"></div>
-      <div class="monitor">
-        <div class="monitor-bezel">
-          <div class="monitor-bar"><span>● ● ●</span><b>Yagna Innovation Arena</b><span>Live</span></div>
-          <div class="monitor-screen">
-            <div class="trophy-wrap">
-              <div class="trophy">
-                <span class="cup"><i>Y</i></span>
-                <span class="stem"></span>
-                <span class="base"></span>
-              </div>
-            </div>
-            <div class="challenge-copy">
-              <span class="arena-label">YAGNA MAKER CONTEST 01</span>
-              <h2>Innovation<br>Challenge</h2>
-              <p>Build your boldest cinematic concept, publish the production breakdown and climb the creator board.</p>
-              <div class="leaderboard">
-                <header><b>LEADERBOARD</b><span>32 projects</span></header>
-                <div class="leader"><b>1</b><span>Shazan AI Studio</span><strong>100,000 credits</strong></div>
-                <div class="leader"><b>2</b><span>Yagna Creators</span><strong>52,800</strong></div>
-                <div class="leader"><b>3</b><span>Open Studio Lab</span><strong>31,400</strong></div>
-              </div>
-            </div>
-          </div>
+        <div class="hero-art">
+          <img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1600&q=90" alt="Astronaut looking at a planet">
+          <div class="planet-glow"></div>
+          <div class="hero-art-label"><span>YAGNA ENGINE</span><b>Connected creative intelligence</b></div>
         </div>
-        <div class="monitor-neck"></div>
-        <div class="monitor-base"></div>
-      </div>
-      <div class="challenge-actions">
-        <a class="gold-button" href="/create.html">Start a project</a>
-        <a class="glass-button" href="/open-studio.html">Enter Yagna Forge</a>
-      </div>
-    </section>
+      </section>
 
-    <footer class="footer">
-      <span>© 2026 Shazan AI Studio · Yagna Engine</span>
-      <span>Original interface · Connected creative infrastructure</span>
-    </footer>
+      <section class="dashboard-section" id="generators" data-search-section>
+        <div class="section-heading"><h2>AI Generators</h2><a href="/open-studio.html">View all tools →</a></div>
+        <div class="generator-grid">
+          <a class="generator-card" href="/create.html?kind=video" data-search-card="ai video generator cinematic text to video">
+            <img src="https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=900&q=85" alt="Cinematic city">
+            <span class="card-icon blue">▷</span><div class="card-gradient"></div><div class="card-copy"><b>AI Video Generator</b><p>Text and references to cinematic motion.</p><em>Open →</em></div>
+          </a>
+          <a class="generator-card" href="/create.html?kind=image" data-search-card="ai image generator art character">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=900&q=85" alt="Creative portrait">
+            <span class="card-icon violet">▧</span><div class="card-gradient"></div><div class="card-copy"><b>AI Image Generator</b><p>Create characters, art and campaign frames.</p><em>Open →</em></div>
+          </a>
+          <a class="generator-card" href="/open-studio.html" data-search-card="ai animation character motion 3d">
+            <img src="https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&w=900&q=85" alt="3D animation character">
+            <span class="card-icon pink">◇</span><div class="card-gradient"></div><div class="card-copy"><b>AI Animation</b><p>Bring illustrated characters and scenes to life.</p><em>Open →</em></div>
+          </a>
+          <a class="generator-card" href="/open-studio.html" data-search-card="ai voices audio music lip sync">
+            <img src="https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=900&q=85" alt="Music and microphone">
+            <span class="card-icon cyan">◉</span><div class="card-gradient"></div><div class="card-copy"><b>AI Voices &amp; Audio</b><p>Voices, music and lip sync workflows.</p><em>Open →</em></div>
+          </a>
+        </div>
+      </section>
+
+      <section class="dashboard-section" id="categories" data-search-section>
+        <div class="section-heading"><h2>Explore by Category</h2><a href="/open-studio.html">View all categories →</a></div>
+        <div class="category-grid">
+          <a class="category-card" href="/create.html?kind=video" data-search-card="cinematic film movie templates"><img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=700&q=85" alt="Cinema"><div><b>Cinematic</b><span>12K+ templates</span></div></a>
+          <a class="category-card" href="/create.html?kind=video" data-search-card="shorts reels social video"><img src="https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=700&q=85" alt="Short video"><div><b>Shorts &amp; Reels</b><span>8K+ templates</span></div></a>
+          <a class="category-card" href="/open-studio.html" data-search-card="anime manga character"><img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=700&q=85" alt="Anime"><div><b>Anime &amp; Manga</b><span>5K+ templates</span></div></a>
+          <a class="category-card" href="/create.html?kind=video" data-search-card="product ads commercial ecommerce"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=700&q=85" alt="Product"><div><b>Product Ads</b><span>6K+ templates</span></div></a>
+          <a class="category-card" href="/create.html?kind=image" data-search-card="art illustration painting concept"><img src="https://images.unsplash.com/photo-1549490349-8643362247b5?auto=format&fit=crop&w=700&q=85" alt="Illustration"><div><b>Art &amp; Illustration</b><span>10K+ templates</span></div></a>
+          <a class="category-card" href="/open-studio.html" data-search-card="3d motion animation"><img src="https://images.unsplash.com/photo-1614728263952-84ea256f9679?auto=format&fit=crop&w=700&q=85" alt="3D world"><div><b>3D &amp; Motion</b><span>7K+ templates</span></div></a>
+        </div>
+      </section>
+
+      <section class="dashboard-section" id="featured" data-search-section>
+        <div class="section-heading"><h2>Featured Works</h2><a href="/create.html#view-jobs">View all works →</a></div>
+        <div class="featured-grid">
+          <a class="featured-card" href="/create.html?kind=video" data-search-card="cyberpunk film city"><img src="https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1000&q=88" alt="Cyberpunk city"><span class="quality">4K</span><div><b>Cyberpunk Requiem</b><small>AI Video · Yagna Visionary</small></div></a>
+          <a class="featured-card" href="/create.html?kind=image" data-search-card="samurai warrior image"><img src="https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=1000&q=88" alt="Samurai"><span class="quality">8K</span><div><b>The Last Samurai</b><small>AI Image · CinemaMaster</small></div></a>
+          <a class="featured-card" href="/create.html?kind=image" data-search-card="dreamscape fantasy world"><img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=88" alt="Fantasy world"><span class="quality">4K</span><div><b>Dreamscape World</b><small>AI Image · PixelArtist</small></div></a>
+          <a class="featured-card" href="/create.html?kind=video" data-search-card="neon city animation"><img src="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1000&q=88" alt="Neon city"><span class="play">▷</span><div><b>Neon City Rush</b><small>AI Animation · MotionLab</small></div></a>
+        </div>
+      </section>
+
+      <section class="dashboard-section" id="tools" data-search-section>
+        <div class="section-heading"><h2>Powerful Tools</h2><a href="/open-studio.html">View all tools →</a></div>
+        <div class="tools-grid">
+          <a class="tool-card" href="/open-studio.html" data-search-card="script writer"><span class="tool-icon purple">▤</span><b>AI Script Writer</b><p>Generate scripts and scene beats instantly.</p></a>
+          <a class="tool-card" href="/open-studio.html" data-search-card="storyboard"><span class="tool-icon teal">▧</span><b>AI Storyboard</b><p>Visualize the full story before rendering.</p></a>
+          <a class="tool-card" href="/open-studio.html" data-search-card="editor edit video"><span class="tool-icon pink">✂</span><b>AI Editor</b><p>Refine, remix and transform generated media.</p></a>
+          <a class="tool-card" href="/open-studio.html" data-search-card="upscaler hd 4k"><span class="tool-icon yellow">HD</span><b>AI Upscaler</b><p>Enhance images and video to Ultra HD.</p></a>
+          <a class="tool-card" href="/open-studio.html" data-search-card="lip sync voice"><span class="tool-icon blue">◉</span><b>AI Lip Sync</b><p>Perfect dialogue synchronization.</p></a>
+          <a class="tool-card" href="/open-studio.html" data-search-card="background remover image"><span class="tool-icon green">⌘</span><b>Background Remover</b><p>One-click subject extraction and cleanup.</p></a>
+        </div>
+      </section>
+
+      <section class="lower-grid" id="community">
+        <article class="panel recent-panel">
+          <header><h2>My Recent Projects</h2><a href="/create.html#view-jobs">→</a></header>
+          <div class="project-list" id="recentProjects">
+            <a href="/create.html#view-jobs"><img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=300&q=70" alt="Space"><span><b>Space Exploration</b><small>AI Video</small></span><em>2h ago</em></a>
+            <a href="/create.html#view-jobs"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=300&q=70" alt="Product"><span><b>Product Advertisement</b><small>AI Video</small></span><em>5h ago</em></a>
+            <a href="/create.html#view-jobs"><img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=300&q=70" alt="Fantasy"><span><b>Fantasy World</b><small>AI Image</small></span><em>1d ago</em></a>
+            <a href="/create.html#view-jobs"><img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=300&q=70" alt="Anime"><span><b>Anime Character</b><small>AI Animation</small></span><em>2d ago</em></a>
+          </div>
+          <a class="panel-button" href="/create.html#view-jobs">View all projects</a>
+        </article>
+
+        <article class="panel challenge-panel">
+          <div class="challenge-crown">✦</div><span>YAGNA CREATOR PREMIERE</span><h2>Build the next<br>visual universe.</h2><p>Create. Publish. Inspire.</p><a href="/create.html">Start creating</a>
+        </article>
+
+        <article class="panel community-panel">
+          <header><h2>Community Spotlight</h2><a href="/open-studio.html">View all →</a></header>
+          <div class="community-list">
+            <a href="/open-studio.html"><img src="https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=200&q=70" alt="Creation"><span><b>Amazing AI Creations</b><small>Creative Community</small></span><em>♥ 2.5K</em></a>
+            <a href="/open-studio.html"><img src="https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=200&q=70" alt="Showcase"><span><b>Weekly Showcase</b><small>Yagna Team</small></span><em>♥ 1.8K</em></a>
+            <a href="/open-studio.html"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=70" alt="Tips"><span><b>Tips &amp; Techniques</b><small>Pro Creators</small></span><em>♥ 3.2K</em></a>
+            <a href="/open-studio.html"><img src="https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=200&q=70" alt="Behind the scenes"><span><b>Behind the Scenes</b><small>AI Artists</small></span><em>♥ 1.2K</em></a>
+          </div>
+        </article>
+      </section>
+
+      <section class="enterprise-strip" id="academy">
+        <a href="/open-studio.html"><span class="enterprise-art cubes"></span><div><b>Enterprise Solutions</b><p>Scale your creative production.</p><em>Learn more →</em></div></a>
+        <a href="/open-studio.html"><span class="enterprise-art api">API</span><div><b>API Access</b><p>Integrate AI into your workflow.</p><em>Learn more →</em></div></a>
+        <a href="/open-studio.html"><span class="enterprise-art model"></span><div><b>Custom Models</b><p>Build your own creative engines.</p><em>Learn more →</em></div></a>
+      </section>
+
+      <footer class="footer"><span>© 2026 Shazan AI Studio · Yagna Engine</span><nav><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Help</a><a href="#">Contact</a></nav></footer>
+    </div>
   </main>
 
   <nav class="mobile-dock" aria-label="Mobile navigation">
     <a class="active" href="/"><span>⌂</span>Home</a>
-    <a href="/create.html?kind=video"><span>▶</span>Video</a>
+    <a href="/create.html?kind=video"><span>▷</span>Video</a>
     <a href="/create.html?kind=image"><span>▧</span>Image</a>
     <a href="/open-studio.html"><span>∞</span>Studio</a>
-    <a href="/create.html#view-jobs"><span>▣</span>Vault</a>
+    <a href="/create.html#view-jobs"><span>▱</span>Projects</a>
   </nav>
 </div>
-<script src="/studio-home.js?v=20260717-grand" defer></script>
+<script src="/studio-home.js?v=20260717-platform" defer></script>
 </body>
 </html>
