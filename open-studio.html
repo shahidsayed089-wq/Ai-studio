@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090807">
+  <meta name="description" content="Open Generative AI inside Shazan AI Studio, powered by MuAPI and Yagna Engine.">
+  <title>Open Studio | Shazan AI</title>
+  <link rel="stylesheet" href="/open-studio.css?v=1">
+</head>
+<body>
+  <header class="studio-bar">
+    <a class="studio-brand" href="/">
+      <span class="studio-mark">S</span>
+      <span><b>Shazan AI Studio</b><small>Yagna Open Studio</small></span>
+    </a>
+    <div class="studio-state"><i></i><span>MuAPI workspace</span></div>
+    <div class="studio-actions">
+      <a class="back" href="/">Back</a>
+      <a class="launch" href="https://muapi.ai/open-generative-ai?utm_source=shazan-ai-studio&utm_medium=integration&utm_campaign=yagna-open-studio" target="_blank" rel="noopener noreferrer">Open full screen ↗</a>
+    </div>
+  </header>
+
+  <main class="frame-shell">
+    <section class="loading-card" id="loadingCard">
+      <span class="flame"></span>
+      <div><b>Opening the generative universe</b><p>Image, video, audio, lip sync, cinema and creative workflows are loading.</p></div>
+    </section>
+    <iframe
+      id="muapiFrame"
+      title="MuAPI Open Generative AI"
+      src="https://muapi.ai/open-generative-ai?utm_source=shazan-ai-studio&utm_medium=integration&utm_campaign=yagna-open-studio"
+      allow="camera; microphone; clipboard-read; clipboard-write; fullscreen"
+      referrerpolicy="strict-origin-when-cross-origin"
+      loading="eager"></iframe>
+    <aside class="frame-fallback" id="frameFallback">
+      <b>Studio not visible?</b>
+      <span>Some mobile browsers block third-party workspaces inside a frame.</span>
+      <a href="https://muapi.ai/open-generative-ai?utm_source=shazan-ai-studio&utm_medium=integration&utm_campaign=yagna-open-studio" target="_blank" rel="noopener noreferrer">Launch MuAPI Open Studio</a>
+    </aside>
+  </main>
+  <script src="/open-studio.js?v=1" defer></script>
+</body>
+</html>
