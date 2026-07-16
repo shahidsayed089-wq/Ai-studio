@@ -1,135 +1,53 @@
 const SESSION_COOKIE = 'ai_studio_session';
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS wallets (
-  user_id TEXT PRIMARY KEY,
-  balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
-  reserved INTEGER NOT NULL DEFAULT 0 CHECK (reserved >= 0),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS generation_charges (
-  id TEXT PRIMARY KEY,
-  provider_task_id TEXT UNIQUE,
-  user_id TEXT NOT NULL,
-  provider TEXT NOT NULL,
-  model TEXT NOT NULL,
-  quoted_cost INTEGER NOT NULL CHECK (quoted_cost > 0),
-  reserved_cost INTEGER NOT NULL CHECK (reserved_cost > 0),
-  provider_cost INTEGER,
-  status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','completed','refunded')),
-  metadata_json TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES wallets(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS wallet_transactions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('topup','reserve','capture','refund','adjustment')),
-  amount INTEGER NOT NULL,
-  balance_after INTEGER NOT NULL,
-  reserved_after INTEGER NOT NULL,
-  reference_id TEXT,
-  note TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES wallets(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS wallet_topups (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  amount INTEGER NOT NULL CHECK (amount > 0),
-  note TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES wallets(user_id)
-);
-
-CREATE INDEX IF NOT EXISTS wallet_transactions_user_created
-  ON wallet_transactions(user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS generation_charges_user_created
-  ON generation_charges(user_id, created_at DESC);
-
-CREATE TRIGGER IF NOT EXISTS generation_reserve_guard
-BEFORE INSERT ON generation_charges
-BEGIN
-  SELECT CASE
-    WHEN COALESCE((SELECT balance FROM wallets WHERE user_id = NEW.user_id), -1) < NEW.reserved_cost
-    THEN RAISE(ABORT, 'insufficient_wallet_credits')
-  END;
-END;
-
-CREATE TRIGGER IF NOT EXISTS generation_reserve_apply
-AFTER INSERT ON generation_charges
-BEGIN
-  UPDATE wallets
-  SET balance = balance - NEW.reserved_cost,
-      reserved = reserved + NEW.reserved_cost,
-      updated_at = CURRENT_TIMESTAMP
-  WHERE user_id = NEW.user_id;
-
-  INSERT INTO wallet_transactions (
-    id, user_id, type, amount, balance_after, reserved_after, reference_id, note
-  )
-  SELECT lower(hex(randomblob(16))), NEW.user_id, 'reserve', -NEW.reserved_cost,
-         balance, reserved, NEW.id, 'Generation credits reserved'
-  FROM wallets WHERE user_id = NEW.user_id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS generation_refund_apply
-AFTER UPDATE OF status ON generation_charges
-WHEN OLD.status = 'reserved' AND NEW.status = 'refunded'
-BEGIN
-  UPDATE wallets
-  SET balance = balance + OLD.reserved_cost,
-      reserved = MAX(0, reserved - OLD.reserved_cost),
-      updated_at = CURRENT_TIMESTAMP
-  WHERE user_id = OLD.user_id;
-
-  INSERT INTO wallet_transactions (
-    id, user_id, type, amount, balance_after, reserved_after, reference_id, note
-  )
-  SELECT lower(hex(randomblob(16))), OLD.user_id, 'refund', OLD.reserved_cost,
-         balance, reserved, OLD.id, 'Failed generation refunded'
-  FROM wallets WHERE user_id = OLD.user_id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS generation_capture_apply
-AFTER UPDATE OF status ON generation_charges
-WHEN OLD.status = 'reserved' AND NEW.status = 'completed'
-BEGIN
-  UPDATE wallets
-  SET reserved = MAX(0, reserved - OLD.reserved_cost),
-      updated_at = CURRENT_TIMESTAMP
-  WHERE user_id = OLD.user_id;
-
-  INSERT INTO wallet_transactions (
-    id, user_id, type, amount, balance_after, reserved_after, reference_id, note
-  )
-  SELECT lower(hex(randomblob(16))), OLD.user_id, 'capture', 0,
-         balance, reserved, OLD.id, 'Generation completed and charge captured'
-  FROM wallets WHERE user_id = OLD.user_id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS wallet_topup_apply
-AFTER INSERT ON wallet_topups
-BEGIN
-  UPDATE wallets
-  SET balance = balance + NEW.amount,
-      updated_at = CURRENT_TIMESTAMP
-  WHERE user_id = NEW.user_id;
-
-  INSERT INTO wallet_transactions (
-    id, user_id, type, amount, balance_after, reserved_after, reference_id, note
-  )
-  SELECT lower(hex(randomblob(16))), NEW.user_id, 'topup', NEW.amount,
-         balance, reserved, NEW.id, COALESCE(NEW.note, 'Wallet top-up')
-  FROM wallets WHERE user_id = NEW.user_id;
-END;
-`;
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS wallets (
+    user_id TEXT PRIMARY KEY,
+    balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
+    reserved INTEGER NOT NULL DEFAULT 0 CHECK (reserved >= 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS generation_charges (
+    id TEXT PRIMARY KEY,
+    provider_task_id TEXT UNIQUE,
+    user_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    quoted_cost INTEGER NOT NULL CHECK (quoted_cost > 0),
+    reserved_cost INTEGER NOT NULL CHECK (reserved_cost > 0),
+    provider_cost INTEGER,
+    status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','completed','refunded')),
+    metadata_json TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES wallets(user_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('topup','reserve','capture','refund','adjustment')),
+    amount INTEGER NOT NULL,
+    balance_after INTEGER NOT NULL,
+    reserved_after INTEGER NOT NULL,
+    reference_id TEXT,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES wallets(user_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS wallet_topups (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    amount INTEGER NOT NULL CHECK (amount > 0),
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES wallets(user_id)
+  )`,
+  'CREATE INDEX IF NOT EXISTS wallet_transactions_user_created ON wallet_transactions(user_id, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS generation_charges_user_created ON generation_charges(user_id, created_at DESC)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS wallet_transactions_reference_type ON wallet_transactions(reference_id, type) WHERE reference_id IS NOT NULL',
+];
 
 let schemaPromise;
 
@@ -194,14 +112,23 @@ function safeEqual(a, b) {
 export async function ensureWalletSchema(db) {
   if (!db) throw new WalletError('wallet_database_missing', 'Bind a Cloudflare D1 database as DB.', 503);
   if (!schemaPromise) {
-    schemaPromise = db.exec(SCHEMA).catch(error => {
+    schemaPromise = (async () => {
+      for (let index = 0; index < SCHEMA_STATEMENTS.length; index += 1) {
+        try {
+          await db.prepare(SCHEMA_STATEMENTS[index]).run();
+        } catch (error) {
+          console.error('wallet_schema_init_failed', index + 1, String(error?.message || error));
+          throw new WalletError(
+            'wallet_schema_init_failed',
+            `The D1 wallet schema could not initialize at step ${index + 1}.`,
+            503,
+            { schemaStep: index + 1 },
+          );
+        }
+      }
+    })().catch(error => {
       schemaPromise = undefined;
-      console.error('wallet_schema_init_failed', String(error?.message || error));
-      throw new WalletError(
-        'wallet_schema_init_failed',
-        'The D1 database is connected, but the wallet schema could not be initialized.',
-        503,
-      );
+      throw error;
     });
   }
   await schemaPromise;
@@ -264,25 +191,45 @@ export async function reserveGeneration(db, { userId, provider, model, cost, met
   await ensureWallet(db, userId);
   const amount = Math.max(1, Math.round(Number(cost) || 0));
   const chargeId = crypto.randomUUID();
-  try {
-    await db.prepare(
+  const transactionId = crypto.randomUUID();
+
+  await db.batch([
+    db.prepare(
       `INSERT INTO generation_charges
        (id, user_id, provider, model, quoted_cost, reserved_cost, status, metadata_json)
-       VALUES (?, ?, ?, ?, ?, ?, 'reserved', ?)`,
-    ).bind(chargeId, userId, provider, model, amount, amount, JSON.stringify(metadata || {})).run();
-  } catch (error) {
-    const message = String(error?.message || error);
-    if (message.includes('insufficient_wallet_credits')) {
-      const state = await readWallet(db, userId, 1);
-      throw new WalletError(
-        'insufficient_wallet_credits',
-        `This render needs ${amount} credits, but the wallet has ${state.wallet?.balance ?? 0}.`,
-        402,
-        { requiredCredits: amount, availableCredits: state.wallet?.balance ?? 0 },
-      );
-    }
-    throw error;
+       SELECT ?, ?, ?, ?, ?, ?, 'reserved', ?
+       WHERE EXISTS (SELECT 1 FROM wallets WHERE user_id = ? AND balance >= ?)`,
+    ).bind(chargeId, userId, provider, model, amount, amount, JSON.stringify(metadata || {}), userId, amount),
+    db.prepare(
+      `UPDATE wallets SET balance = balance - ?, reserved = reserved + ?, updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ? AND EXISTS (
+         SELECT 1 FROM generation_charges WHERE id = ? AND user_id = ? AND status = 'reserved'
+       )`,
+    ).bind(amount, amount, userId, chargeId, userId),
+    db.prepare(
+      `INSERT OR IGNORE INTO wallet_transactions
+       (id, user_id, type, amount, balance_after, reserved_after, reference_id, note)
+       SELECT ?, user_id, 'reserve', ?, balance, reserved, ?, 'Generation credits reserved'
+       FROM wallets WHERE user_id = ? AND EXISTS (
+         SELECT 1 FROM generation_charges WHERE id = ? AND user_id = ? AND status = 'reserved'
+       )`,
+    ).bind(transactionId, -amount, chargeId, userId, chargeId, userId),
+  ]);
+
+  const charge = await db.prepare(
+    'SELECT id FROM generation_charges WHERE id = ? AND user_id = ?',
+  ).bind(chargeId, userId).first();
+
+  if (!charge) {
+    const state = await readWallet(db, userId, 1);
+    throw new WalletError(
+      'insufficient_wallet_credits',
+      `This render needs ${amount} credits, but the wallet has ${state.wallet?.balance ?? 0}.`,
+      402,
+      { requiredCredits: amount, availableCredits: state.wallet?.balance ?? 0 },
+    );
   }
+
   return { chargeId, cost: amount, ...(await readWallet(db, userId, 10)) };
 }
 
@@ -295,22 +242,71 @@ export async function attachProviderTask(db, chargeId, providerTaskId, providerC
 }
 
 export async function refundCharge(db, chargeId) {
-  await db.prepare(
-    `UPDATE generation_charges SET status = 'refunded', updated_at = CURRENT_TIMESTAMP
-     WHERE id = ? AND status = 'reserved'`,
-  ).bind(chargeId).run();
+  const transactionId = crypto.randomUUID();
+  await db.batch([
+    db.prepare(
+      `UPDATE wallets
+       SET balance = balance + COALESCE((SELECT reserved_cost FROM generation_charges WHERE id = ? AND status = 'reserved'), 0),
+           reserved = MAX(0, reserved - COALESCE((SELECT reserved_cost FROM generation_charges WHERE id = ? AND status = 'reserved'), 0)),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = (SELECT user_id FROM generation_charges WHERE id = ? AND status = 'reserved')`,
+    ).bind(chargeId, chargeId, chargeId),
+    db.prepare(
+      `INSERT OR IGNORE INTO wallet_transactions
+       (id, user_id, type, amount, balance_after, reserved_after, reference_id, note)
+       SELECT ?, c.user_id, 'refund', c.reserved_cost, w.balance, w.reserved, c.id, 'Failed generation refunded'
+       FROM generation_charges c JOIN wallets w ON w.user_id = c.user_id
+       WHERE c.id = ? AND c.status = 'reserved'`,
+    ).bind(transactionId, chargeId),
+    db.prepare(
+      `UPDATE generation_charges SET status = 'refunded', updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'reserved'`,
+    ).bind(chargeId),
+  ]);
 }
 
 export async function finalizeTask(db, userId, providerTaskId, status, providerCost = null) {
   await ensureWallet(db, userId);
-  const nextStatus = status === 'completed' ? 'completed' : status === 'failed' ? 'refunded' : null;
-  if (nextStatus) {
-    await db.prepare(
-      `UPDATE generation_charges
-       SET status = ?, provider_cost = COALESCE(?, provider_cost), updated_at = CURRENT_TIMESTAMP
+
+  if (status === 'completed') {
+    const transactionId = crypto.randomUUID();
+    await db.batch([
+      db.prepare(
+        `UPDATE wallets
+         SET reserved = MAX(0, reserved - COALESCE((
+           SELECT reserved_cost FROM generation_charges
+           WHERE provider_task_id = ? AND user_id = ? AND status = 'reserved'
+         ), 0)), updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = ?`,
+      ).bind(providerTaskId, userId, userId),
+      db.prepare(
+        `INSERT OR IGNORE INTO wallet_transactions
+         (id, user_id, type, amount, balance_after, reserved_after, reference_id, note)
+         SELECT ?, c.user_id, 'capture', 0, w.balance, w.reserved, c.id, 'Generation completed and charge captured'
+         FROM generation_charges c JOIN wallets w ON w.user_id = c.user_id
+         WHERE c.provider_task_id = ? AND c.user_id = ? AND c.status = 'reserved'`,
+      ).bind(transactionId, providerTaskId, userId),
+      db.prepare(
+        `UPDATE generation_charges
+         SET status = 'completed', provider_cost = COALESCE(?, provider_cost), updated_at = CURRENT_TIMESTAMP
+         WHERE provider_task_id = ? AND user_id = ? AND status = 'reserved'`,
+      ).bind(providerCost, providerTaskId, userId),
+    ]);
+  } else if (status === 'failed') {
+    const charge = await db.prepare(
+      `SELECT id FROM generation_charges
        WHERE provider_task_id = ? AND user_id = ? AND status = 'reserved'`,
-    ).bind(nextStatus, providerCost, providerTaskId, userId).run();
+    ).bind(providerTaskId, userId).first();
+    if (charge?.id) {
+      if (providerCost != null) {
+        await db.prepare(
+          'UPDATE generation_charges SET provider_cost = ? WHERE id = ?',
+        ).bind(providerCost, charge.id).run();
+      }
+      await refundCharge(db, charge.id);
+    }
   }
+
   return readWallet(db, userId, 20);
 }
 
@@ -324,14 +320,36 @@ export async function assertTaskOwner(db, userId, providerTaskId) {
   return charge;
 }
 
-export async function topUpWallet(db, userId, amount, note = 'Admin wallet top-up') {
+export async function topUpWalletOnce(db, userId, amount, note = 'Wallet top-up', topupId = crypto.randomUUID()) {
   await ensureWallet(db, userId);
   const credits = Math.max(1, Math.round(Number(amount) || 0));
-  const id = crypto.randomUUID();
-  await db.prepare(
-    'INSERT INTO wallet_topups (id, user_id, amount, note) VALUES (?, ?, ?, ?)',
-  ).bind(id, userId, credits, String(note || '').slice(0, 240)).run();
+  const transactionId = crypto.randomUUID();
+
+  await db.batch([
+    db.prepare(
+      'INSERT OR IGNORE INTO wallet_topups (id, user_id, amount, note) VALUES (?, ?, ?, ?)',
+    ).bind(topupId, userId, credits, String(note || '').slice(0, 240)),
+    db.prepare(
+      `UPDATE wallets SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?
+         AND EXISTS (SELECT 1 FROM wallet_topups WHERE id = ? AND user_id = ?)
+         AND NOT EXISTS (SELECT 1 FROM wallet_transactions WHERE reference_id = ? AND type = 'topup')`,
+    ).bind(credits, userId, topupId, userId, topupId),
+    db.prepare(
+      `INSERT OR IGNORE INTO wallet_transactions
+       (id, user_id, type, amount, balance_after, reserved_after, reference_id, note)
+       SELECT ?, user_id, 'topup', ?, balance, reserved, ?, ?
+       FROM wallets WHERE user_id = ?
+         AND EXISTS (SELECT 1 FROM wallet_topups WHERE id = ? AND user_id = ?)
+         AND NOT EXISTS (SELECT 1 FROM wallet_transactions WHERE reference_id = ? AND type = 'topup')`,
+    ).bind(transactionId, credits, topupId, String(note || 'Wallet top-up').slice(0, 240), userId, topupId, userId, topupId),
+  ]);
+
   return readWallet(db, userId, 50);
+}
+
+export async function topUpWallet(db, userId, amount, note = 'Admin wallet top-up') {
+  return topUpWalletOnce(db, userId, amount, note, crypto.randomUUID());
 }
 
 export function walletResponse(data, setCookie = null, init = {}) {
