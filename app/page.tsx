@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 
 type Mode = "image" | "video" | "music" | "voice" | "avatar";
 type ReferenceKind = "images" | "videos" | "audio";
-type ReferenceFiles = Record<ReferenceKind, string[]>;
+type ReferenceFiles = Record<ReferenceKind, File[]>;
 type VideoInputSlot = {
   kind: ReferenceKind;
   label: string;
@@ -18,7 +18,7 @@ type VideoInputProfile = {
   totalLimit: number;
   slots: VideoInputSlot[];
 };
-type GeneratorStatus = "ready" | "api-required";
+type GeneratorStatus = "ready" | "uploading" | "queued" | "processing" | "completed" | "failed";
 type IconName =
   | Mode
   | "sparkle"
@@ -54,6 +54,63 @@ const modelMap: Record<Mode, string[]> = {
 };
 
 const emptyReferences = (): ReferenceFiles => ({ images: [], videos: [], audio: [] });
+
+const getApiModelKey = (modelName: string) => {
+  const keys: Record<string, string> = {
+    "Seedance 2.0 Standard": "seedance_2_0_standard",
+    "Seedance 2.0 Fast": "seedance_2_0_fast",
+    "Seedance 2.0 Mini": "seedance_2_0_mini",
+    "Kling 3.0 Omni": "kling_3_0_omni",
+    "Kling 3.0": "kling_3_0",
+    "Happy Horse 1.1": "happy_horse_1_1",
+    "Sora 2": "sora_2",
+    "Veo 3.1": "veo_3_1",
+    "Runway Gen-4.5": "runway_gen_4_5",
+    "Luma Ray3.2": "luma_ray_3_2",
+    "Luma Ray3.14": "luma_ray_3_14",
+  };
+  return keys[modelName] ?? modelName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+};
+
+const extractApiMessage = (value: unknown, fallback: string) => {
+  if (!value || typeof value !== "object") return fallback;
+  const record = value as Record<string, unknown>;
+  for (const key of ["message", "detail", "error"]) {
+    const message = record[key];
+    if (typeof message === "string" && message.trim()) return message;
+    if (message && typeof message === "object") {
+      const nested = message as Record<string, unknown>;
+      if (typeof nested.message === "string") return nested.message;
+    }
+  }
+  return fallback;
+};
+
+const extractVideoUrl = (value: unknown): string | null => {
+  const seen = new Set<unknown>();
+  const candidates: { url: string; score: number }[] = [];
+
+  const visit = (item: unknown, path: string) => {
+    if (typeof item === "string" && /^https:\/\//i.test(item)) {
+      if (/status|cancel|webhook/i.test(path)) return;
+      const isVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(item);
+      const videoPath = /video|result|output|raw/i.test(path);
+      candidates.push({ url: item, score: (isVideo ? 5 : 0) + (videoPath ? 2 : 0) });
+      return;
+    }
+    if (!item || typeof item !== "object" || seen.has(item)) return;
+    seen.add(item);
+    if (Array.isArray(item)) {
+      item.forEach((entry, index) => visit(entry, `${path}.${index}`));
+      return;
+    }
+    Object.entries(item as Record<string, unknown>).forEach(([key, entry]) => visit(entry, `${path}.${key}`));
+  };
+
+  visit(value, "response");
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0]?.score ? candidates[0].url : null;
+};
 
 const seedanceInputProfile: VideoInputProfile = {
   title: "Multimodal references",
@@ -331,7 +388,15 @@ export default function Home() {
   const [references, setReferences] = useState<ReferenceFiles>(emptyReferences);
   const [videoGeneratorOpen, setVideoGeneratorOpen] = useState(false);
   const [generatorStatus, setGeneratorStatus] = useState<GeneratorStatus>("ready");
+  const [generatorMessage, setGeneratorMessage] = useState("Ready for a secure Higgsfield render.");
+  const [generatorVideoUrl, setGeneratorVideoUrl] = useState("");
+  const [generatorRequestId, setGeneratorRequestId] = useState("");
+  const [studioAccessCode, setStudioAccessCode] = useState("");
+  const [videoAspectRatio, setVideoAspectRatio] = useState("16:9");
+  const [videoResolution, setVideoResolution] = useState("720p");
+  const [videoDuration, setVideoDuration] = useState(5);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const generatorRunRef = useRef(0);
 
   const currentMode = useMemo(
     () => modes.find((item) => item.id === activeMode) ?? modes[0],
@@ -367,6 +432,10 @@ export default function Home() {
     : creditVideoInput
       ? `per render · varies with 2–15s reference video`
       : `per render · image/audio references included`;
+  const generatorBusy = generatorStatus === "uploading" || generatorStatus === "queued" || generatorStatus === "processing";
+  const generatorResolutionOptions = model.includes("Fast") || model.includes("Mini")
+    ? ["480p", "720p"]
+    : ["480p", "720p", "1080p", "4k"];
 
   const selectCreditModel = (nextModel: CreditModel) => {
     setCreditModel(nextModel);
@@ -392,8 +461,7 @@ export default function Home() {
       const openTotalSlots = Math.max(0, totalLimit - currentTotal);
       const openKindSlots = Math.max(0, kindLimit - current[kind].length);
       const accepted = Array.from(files)
-        .map((file) => file.name)
-        .filter((name) => !current[kind].includes(name))
+        .filter((file) => !current[kind].some((existing) => existing.name === file.name && existing.size === file.size && existing.lastModified === file.lastModified))
         .slice(0, Math.min(openTotalSlots, openKindSlots));
       return accepted.length ? { ...current, [kind]: [...current[kind], ...accepted] } : current;
     });
@@ -401,10 +469,18 @@ export default function Home() {
 
   const clearReferences = () => setReferences(emptyReferences());
 
+  const resetGenerator = () => {
+    generatorRunRef.current += 1;
+    setGeneratorStatus("ready");
+    setGeneratorMessage("Ready for a secure Higgsfield render.");
+    setGeneratorVideoUrl("");
+    setGeneratorRequestId("");
+  };
+
   const changeModel = (value: string) => {
     setModel(value);
     clearReferences();
-    setGeneratorStatus("ready");
+    resetGenerator();
   };
 
   const switchMode = (mode: Mode) => {
@@ -412,7 +488,7 @@ export default function Home() {
     setModel(modelMap[mode][0]);
     clearReferences();
     setVideoGeneratorOpen(false);
-    setGeneratorStatus("ready");
+    resetGenerator();
     setCreationReady(false);
   };
 
@@ -434,7 +510,7 @@ export default function Home() {
     if (!prompt.trim()) setPrompt(nextPrompt);
 
     if (activeMode === "video") {
-      setGeneratorStatus("ready");
+      if (generatorStatus === "failed") resetGenerator();
       setCreationReady(false);
       setVideoGeneratorOpen(true);
       return;
@@ -448,7 +524,139 @@ export default function Home() {
     }, 1800);
   };
 
-  const requestVideoRender = () => setGeneratorStatus("api-required");
+  const requestVideoRender = async () => {
+    const cleanPrompt = prompt.trim();
+    if (!cleanPrompt) {
+      setGeneratorStatus("failed");
+      setGeneratorMessage("Generate karne se pehle prompt likhiye.");
+      return;
+    }
+
+    if (model.startsWith("Seedance 2.0") && references.audio.length > 0 && references.images.length + references.videos.length === 0) {
+      setGeneratorStatus("failed");
+      setGeneratorMessage("Seedance audio reference ke saath kam se kam ek image ya video reference bhi chahiye.");
+      return;
+    }
+
+    const runId = generatorRunRef.current + 1;
+    generatorRunRef.current = runId;
+    setGeneratorVideoUrl("");
+    setGeneratorRequestId("");
+
+    try {
+      const uploadFile = async (file: File) => {
+        const response = await fetch("/api/higgsfield/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+            "X-File-Name": encodeURIComponent(file.name),
+            "X-Studio-Access": studioAccessCode,
+          },
+          body: file,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(extractApiMessage(payload, `Upload failed (${response.status})`));
+        if (typeof payload.url !== "string") throw new Error("Higgsfield upload URL nahi mila.");
+        return payload.url as string;
+      };
+
+      const hasReferences = referenceTotal > 0;
+      if (hasReferences) {
+        setGeneratorStatus("uploading");
+        setGeneratorMessage(`${referenceTotal} reference file${referenceTotal === 1 ? "" : "s"} secure upload ho rahe hain…`);
+      } else {
+        setGeneratorStatus("queued");
+        setGeneratorMessage("Higgsfield ko generation request bhej rahe hain…");
+      }
+
+      const [imageReferences, videoReferences, audioReferences] = await Promise.all([
+        Promise.all(references.images.map(uploadFile)),
+        Promise.all(references.videos.map(uploadFile)),
+        Promise.all(references.audio.map(uploadFile)),
+      ]);
+      if (generatorRunRef.current !== runId) return;
+
+      const normalizedResolution = generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p";
+      const argumentsPayload: Record<string, unknown> = {
+        prompt: cleanPrompt,
+        aspect_ratio: videoAspectRatio,
+        duration: videoDuration,
+        resolution: normalizedResolution,
+      };
+
+      if (model.startsWith("Seedance 2.0")) {
+        argumentsPayload.generate_audio = true;
+        argumentsPayload.bitrate_mode = "standard";
+        if (!model.includes("Mini")) argumentsPayload.mode = model.includes("Fast") ? "fast" : "std";
+        if (imageReferences.length) argumentsPayload.image_references = imageReferences;
+        if (videoReferences.length) argumentsPayload.video_references = videoReferences;
+        if (audioReferences.length) argumentsPayload.audio_references = audioReferences;
+      } else if (model === "Kling 3.0") {
+        argumentsPayload.sound = "on";
+        argumentsPayload.mode = normalizedResolution === "4k" ? "4k" : normalizedResolution === "1080p" ? "pro" : "std";
+        if (imageReferences[0]) argumentsPayload.start_image = imageReferences[0];
+        if (imageReferences[1]) argumentsPayload.end_image = imageReferences[1];
+      } else if (model === "Kling 3.0 Omni") {
+        if (videoReferences.length) argumentsPayload.video_references = videoReferences;
+      } else if (model === "Luma Ray3.14") {
+        if (videoReferences.length) argumentsPayload.video_references = videoReferences;
+      } else {
+        if (imageReferences[0]) {
+          argumentsPayload.start_image = imageReferences[0];
+          argumentsPayload.image_url = imageReferences[0];
+        }
+        if (imageReferences[1]) argumentsPayload.end_image = imageReferences[1];
+      }
+
+      setGeneratorStatus("queued");
+      setGeneratorMessage("Request accepted hone ka wait kar rahe hain…");
+      const submitResponse = await fetch("/api/higgsfield/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Studio-Access": studioAccessCode },
+        body: JSON.stringify({ model: getApiModelKey(model), arguments: argumentsPayload }),
+      });
+      let payload: unknown = await submitResponse.json().catch(() => ({}));
+      if (!submitResponse.ok) throw new Error(extractApiMessage(payload, `Generation failed (${submitResponse.status})`));
+      if (generatorRunRef.current !== runId) return;
+
+      let responseRecord = payload as Record<string, unknown>;
+      const requestId = typeof responseRecord.request_id === "string" ? responseRecord.request_id : "";
+      if (requestId) setGeneratorRequestId(requestId);
+
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const status = typeof responseRecord.status === "string" ? responseRecord.status.toLowerCase() : "queued";
+        const resultUrl = extractVideoUrl(payload);
+        if (status === "completed" && resultUrl) {
+          setGeneratorVideoUrl(resultUrl);
+          setGeneratorStatus("completed");
+          setGeneratorMessage("Video ready hai — preview ya download kar sakte hain.");
+          return;
+        }
+        if (["failed", "nsfw", "canceled", "cancelled"].includes(status)) {
+          throw new Error(extractApiMessage(payload, status === "nsfw" ? "Prompt moderation mein reject hua; provider credits refund karega." : `Generation ${status}.`));
+        }
+        if (!requestId) throw new Error("Higgsfield ne request ID return nahi ki.");
+
+        setGeneratorStatus(status === "in_progress" || status === "processing" ? "processing" : "queued");
+        setGeneratorMessage(status === "in_progress" || status === "processing" ? "Higgsfield video render kar raha hai…" : "Request queue mein hai…");
+        await new Promise((resolve) => window.setTimeout(resolve, 3000));
+        if (generatorRunRef.current !== runId) return;
+
+        const statusResponse = await fetch(`/api/higgsfield/status/${encodeURIComponent(requestId)}`, {
+          headers: { "X-Studio-Access": studioAccessCode },
+          cache: "no-store",
+        });
+        payload = await statusResponse.json().catch(() => ({}));
+        if (!statusResponse.ok) throw new Error(extractApiMessage(payload, `Status check failed (${statusResponse.status})`));
+        responseRecord = payload as Record<string, unknown>;
+      }
+      throw new Error("Render abhi bhi process ho raha hai. Request ID save hai; thodi der baad dobara check karein.");
+    } catch (error) {
+      if (generatorRunRef.current !== runId) return;
+      setGeneratorStatus("failed");
+      setGeneratorMessage(error instanceof Error ? error.message : "Generation start nahi ho saki.");
+    }
+  };
 
   return (
     <main>
@@ -573,14 +781,14 @@ export default function Home() {
               </label>
               <label className="select-control">
                 <span><Icon name="expand" size={17} /> Aspect ratio</span>
-                <select defaultValue="16:9 Widescreen">
-                  <option>16:9 Widescreen</option><option>9:16 Vertical</option><option>1:1 Square</option><option>4:5 Portrait</option>
+                <select value={videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}>
+                  <option value="16:9">16:9 Widescreen</option><option value="9:16">9:16 Vertical</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Landscape</option>
                 </select>
               </label>
               <label className="select-control">
                 <span><Icon name="cube" size={17} /> Quality</span>
-                <select defaultValue="Ultra">
-                  <option>Ultra</option><option>High</option><option>Fast</option>
+                <select value={activeMode === "video" ? (generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p") : "2k"} onChange={(event) => { if (activeMode === "video") setVideoResolution(event.target.value); }}>
+                  {(activeMode === "video" ? generatorResolutionOptions : ["1k", "2k", "4k"]).map((option) => <option key={option}>{option}</option>)}
                 </select>
               </label>
               <label className="select-control hide-small">
@@ -629,10 +837,16 @@ export default function Home() {
             </header>
 
             <div className="video-generator-body">
-              <div className="generator-preview">
+              <div className={generatorVideoUrl ? "generator-preview has-result" : "generator-preview"}>
                 <span className="generator-preview-badge"><Icon name="sparkle" size={14} /> {videoInputProfile.title}</span>
-                <span className="generator-play"><Icon name="play" size={32} /></span>
-                <span className="generator-preview-copy"><small>PREVIEW CANVAS</small><b>Your generated shot will appear here</b></span>
+                {generatorVideoUrl ? (
+                  <video src={generatorVideoUrl} controls playsInline preload="metadata" />
+                ) : (
+                  <>
+                    <span className={generatorBusy ? "generator-play is-loading" : "generator-play"}><Icon name={generatorBusy ? "sparkle" : "play"} size={32} /></span>
+                    <span className="generator-preview-copy"><small>{generatorBusy ? "HIGGSFIELD RENDER" : "PREVIEW CANVAS"}</small><b>{generatorBusy ? generatorMessage : "Your generated shot will appear here"}</b></span>
+                  </>
+                )}
               </div>
 
               <div className="generator-settings">
@@ -646,6 +860,12 @@ export default function Home() {
                   <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} />
                 </label>
 
+                <div className="generator-control-grid">
+                  <label><span>Aspect</span><select value={videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>21:9</option></select></label>
+                  <label><span>Resolution</span><select value={generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p"} onChange={(event) => setVideoResolution(event.target.value)}>{generatorResolutionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+                  <label><span>Duration</span><select value={videoDuration} onChange={(event) => setVideoDuration(Number(event.target.value))}><option value={5}>5 sec</option><option value={8}>8 sec</option><option value={10}>10 sec</option><option value={15}>15 sec</option></select></label>
+                </div>
+
                 <div className="generator-input-summary">
                   <span><Icon name="layers" size={17} /><b>{videoInputProfile.title}</b></span>
                   <small>{videoInputProfile.summary}</small>
@@ -654,23 +874,26 @@ export default function Home() {
                       <i key={slot.kind}>{references[slot.kind].length}/{slot.limit} {slot.kind}</i>
                     ))}
                   </div>
+                  {referenceTotal > 0 && <p>{[...references.images, ...references.videos, ...references.audio].map((file) => file.name).join(" · ")}</p>}
                 </div>
 
-                {generatorStatus === "api-required" && (
-                  <div className="generator-api-notice" role="status">
-                    <Icon name="sliders" size={19} />
-                    <span><b>Secure Higgsfield bridge required</b><small>The generator is open correctly. Final rendering needs a Cloudflare server endpoint so your secret key never reaches the public browser.</small></span>
+                <label className="generator-access-code">
+                  <span>Owner access code</span>
+                  <input type="password" value={studioAccessCode} onChange={(event) => setStudioAccessCode(event.target.value)} placeholder="Cloudflare STUDIO_ACCESS_CODE" autoComplete="current-password" />
+                </label>
+
+                {generatorStatus !== "ready" && (
+                  <div className={`generator-api-notice status-${generatorStatus}`} role="status">
+                    <Icon name={generatorStatus === "completed" ? "check" : generatorStatus === "failed" ? "sliders" : "sparkle"} size={19} />
+                    <span><b>{generatorStatus === "completed" ? "Render complete" : generatorStatus === "failed" ? "Render could not start" : generatorStatus === "uploading" ? "Uploading references" : generatorStatus === "queued" ? "Queued" : "Rendering"}</b><small>{generatorMessage}{generatorRequestId ? ` · Request ${generatorRequestId}` : ""}</small></span>
                   </div>
                 )}
 
                 <div className="generator-actions">
                   <button className="generator-back" onClick={() => setVideoGeneratorOpen(false)}>Back to inputs</button>
-                  {generatorStatus === "ready" ? (
-                    <button className="generator-render" onClick={requestVideoRender}><Icon name="sparkle" size={18} /> Generate video</button>
-                  ) : (
-                    <a className="generator-provider" href={providerUrl} target="_blank" rel="noreferrer">Open provider now <Icon name="arrow" size={17} /></a>
-                  )}
+                  <button className="generator-render" onClick={requestVideoRender} disabled={generatorBusy}><Icon name="sparkle" size={18} /> {generatorBusy ? "Generating…" : generatorStatus === "completed" ? "Generate another" : "Generate video"}</button>
                 </div>
+                {generatorStatus === "failed" && <a className="generator-fallback" href={providerUrl} target="_blank" rel="noreferrer">Open provider directly <Icon name="arrow" size={15} /></a>}
               </div>
             </div>
           </section>
