@@ -48,7 +48,7 @@ const modes: { id: Mode; label: string; placeholder: string }[] = [
 const modelMap: Record<Mode, string[]> = {
   image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Grok Imagine Image", "FLUX 2 Pro"],
   video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Gemini Omni Flash", "Grok Imagine Video 1.5", "Kling 3.0 Pro", "Kling 3.0 Omni 4K", "Kling 3.0 Elements", "Veo 3.1", "Happy Horse 1.1"],
-  music: ["Lyria 3", "AudioFlow", "Suno", "Udio", "Score Composer"],
+  music: ["Lyria 3", "AudioFlow · ElevenLabs", "Suno · Kie", "MiniMax Music 2.5", "Score Composer · CassetteAI"],
   voice: ["GPT Realtime Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
 };
@@ -72,6 +72,11 @@ const getApiModelKey = (modelName: string) => {
     "Grok Imagine Video 1.5": "grok_imagine_video_1_5",
     "Happy Horse 1.1": "happy_horse_1_1",
     "Veo 3.1": "veo_3_1",
+    "Lyria 3": "lyria_3",
+    "AudioFlow · ElevenLabs": "audioflow_elevenlabs",
+    "Suno · Kie": "suno",
+    "MiniMax Music 2.5": "minimax_music_2_5",
+    "Score Composer · CassetteAI": "score_composer_cassetteai",
   };
   return keys[modelName] ?? modelName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 };
@@ -224,7 +229,7 @@ const toolGroups = [
     label: "Music Lab",
     description: "Original songs, cinematic scores, stems, sound design and intelligent mastering.",
     accent: "violet",
-    meta: "8 engines",
+    meta: "5 connected engines",
   },
   {
     icon: "voice" as IconName,
@@ -288,10 +293,11 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
     { name: "Happy Horse 1.1", maker: "ALIBABA", tag: "1080p", art: "coral", features: ["Text or first frame", "Image-to-video"] },
   ],
   music: [
-    { name: "Lyria 3", maker: "GOOGLE", tag: "Music", art: "gold", features: ["Text to music", "Instrumental control"] },
-    { name: "AudioFlow", maker: "SHAZAN", tag: "Score", art: "world", features: ["Cinematic score", "Stem export"] },
-    { name: "Suno", maker: "SUNO", tag: "Songs", art: "coral", features: ["Vocals", "Full songs"] },
-    { name: "Udio", maker: "UDIO", tag: "Studio", art: "ice", features: ["Music creation", "Remix"] },
+    { name: "Lyria 3", maker: "GOOGLE · FAL", tag: "30 sec", art: "gold", features: ["Vocals + lyrics", "Prompt-to-music"] },
+    { name: "AudioFlow · ElevenLabs", maker: "SHAZAN · ELEVENLABS", tag: "3–600 sec", art: "world", features: ["Cinematic score", "Full-length music"] },
+    { name: "Suno · Kie", maker: "SUNO · KIE", tag: "Songs", art: "coral", features: ["Vocals", "Two variations"] },
+    { name: "MiniMax Music 2.5", maker: "MINIMAX · FAL", tag: "2.5", art: "ice", features: ["Auto lyrics", "Full songs"] },
+    { name: "Score Composer · CassetteAI", maker: "SHAZAN · CASSETTEAI", tag: "Score", art: "portrait", features: ["Cinematic score", "30–180 sec"] },
   ],
   voice: [
     { name: "GPT Realtime Voice", maker: "OPENAI", tag: "Live", art: "gold", features: ["Realtime", "Multilingual"] },
@@ -351,6 +357,10 @@ const modelUniverse: { name: string; mode: Mode }[] = [
   { name: "Happy Horse 1.1", mode: "video" },
   { name: "Veo 3.1", mode: "video" },
   { name: "Lyria 3", mode: "music" },
+  { name: "AudioFlow · ElevenLabs", mode: "music" },
+  { name: "Suno · Kie", mode: "music" },
+  { name: "MiniMax Music 2.5", mode: "music" },
+  { name: "Score Composer · CassetteAI", mode: "music" },
   { name: "ElevenLabs", mode: "voice" },
 ];
 
@@ -416,6 +426,7 @@ export default function Home() {
   const [videoAspectRatio, setVideoAspectRatio] = useState("16:9");
   const [videoResolution, setVideoResolution] = useState("720p");
   const [videoDuration, setVideoDuration] = useState(5);
+  const [musicDuration, setMusicDuration] = useState(30);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const generatorRunRef = useRef(0);
 
@@ -433,7 +444,14 @@ export default function Home() {
         totalLimit: 9,
         slots: [{ kind: "images" as ReferenceKind, label: "Add images", note: "Up to 9 workspace slots", accept: "image/*", limit: 9 }],
       }
-    : getVideoInputProfile(model);
+    : activeMode === "music"
+      ? {
+          title: "Text to music",
+          summary: model === "Lyria 3" ? "Lyria 3 · fixed 30-second MP3" : `${model} · prompt-driven audio generation`,
+          totalLimit: 0,
+          slots: [] as VideoInputSlot[],
+        }
+      : getVideoInputProfile(model);
   const baseApiRate = creditModel === "kling" ? 0.07 : 0.057;
   const creditTotal = `$${(baseApiRate * creditDuration).toFixed(2)}+`;
   const creditMath = `$${baseApiRate.toFixed(3)}/sec base rate × ${creditDuration} sec`;
@@ -463,6 +481,7 @@ export default function Home() {
       : model === "Grok Imagine Video 1.5"
         ? [6, 8, 10, 15]
         : [5, 8, 10, 15];
+  const musicDurationOptions = model === "Lyria 3" ? [30] : [30, 60, 120, 180];
 
   const selectCreditModel = (nextModel: CreditModel) => {
     setCreditModel(nextModel);
@@ -495,13 +514,14 @@ export default function Home() {
     setGeneratorStatus("ready");
     setGeneratorMessage("Ready for a secure SHAZAN render.");
     setGeneratorVideoUrl("");
-    setGeneratorOutputType(activeMode === "image" ? "image" : "video");
+    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" ? "audio" : "video");
     setGeneratorRequestId("");
   };
 
   const changeModel = (value: string) => {
     setModel(value);
-    if (value === "Gemini Omni Flash" || value === "Veo 3.1") setVideoDuration(8);
+    if (value === "Lyria 3") setMusicDuration(30);
+    else if (value === "Gemini Omni Flash" || value === "Veo 3.1") setVideoDuration(8);
     else if (value === "Grok Imagine Video 1.5") setVideoDuration(6);
     else setVideoDuration(5);
     clearReferences();
@@ -534,9 +554,9 @@ export default function Home() {
     const nextPrompt = prompt.trim() || promptIdeas[activeMode];
     if (!prompt.trim()) setPrompt(nextPrompt);
 
-    if (activeMode === "video" || activeMode === "image") {
+    if (activeMode === "video" || activeMode === "image" || activeMode === "music") {
       if (generatorStatus === "failed") resetGenerator();
-      setGeneratorOutputType(activeMode);
+      setGeneratorOutputType(activeMode === "music" ? "audio" : activeMode);
       setCreationReady(false);
       setVideoGeneratorOpen(true);
       return;
@@ -567,7 +587,7 @@ export default function Home() {
     const runId = generatorRunRef.current + 1;
     generatorRunRef.current = runId;
     setGeneratorVideoUrl("");
-    setGeneratorOutputType(activeMode === "image" ? "image" : "video");
+    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" ? "audio" : "video");
     setGeneratorRequestId("");
 
     try {
@@ -607,7 +627,7 @@ export default function Home() {
       const argumentsPayload: Record<string, unknown> = {
         prompt: cleanPrompt,
         aspect_ratio: generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9",
-        duration: videoDuration,
+        duration: activeMode === "music" ? musicDuration : videoDuration,
         resolution: normalizedResolution,
       };
 
@@ -806,23 +826,31 @@ export default function Home() {
                 </select>
               </label>
               <label className="select-control">
-                <span><Icon name="expand" size={17} /> Aspect ratio</span>
-                <select value={videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}>
-                  <option value="16:9">16:9 Widescreen</option><option value="9:16">9:16 Vertical</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Landscape</option>
-                </select>
+                <span><Icon name={activeMode === "music" ? "music" : "expand"} size={17} /> {activeMode === "music" ? "Track length" : "Aspect ratio"}</span>
+                {activeMode === "music" ? (
+                  <select value={musicDurationOptions.includes(musicDuration) ? musicDuration : musicDurationOptions[0]} onChange={(event) => setMusicDuration(Number(event.target.value))}>
+                    {musicDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}
+                  </select>
+                ) : (
+                  <select value={videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}>
+                    <option value="16:9">16:9 Widescreen</option><option value="9:16">9:16 Vertical</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Landscape</option>
+                  </select>
+                )}
               </label>
               <label className="select-control">
-                <span><Icon name="cube" size={17} /> Quality</span>
-                <select value={activeMode === "video" ? (generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p") : "2k"} onChange={(event) => { if (activeMode === "video") setVideoResolution(event.target.value); }}>
-                  {(activeMode === "video" ? generatorResolutionOptions : ["1k", "2k", "4k"]).map((option) => <option key={option}>{option}</option>)}
-                </select>
+                <span><Icon name="cube" size={17} /> {activeMode === "music" ? "Format" : "Quality"}</span>
+                {activeMode === "music" ? <select value="MP3" aria-readonly="true"><option>MP3</option></select> : (
+                  <select value={activeMode === "video" ? (generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p") : "2k"} onChange={(event) => { if (activeMode === "video") setVideoResolution(event.target.value); }}>
+                    {(activeMode === "video" ? generatorResolutionOptions : ["1k", "2k", "4k"]).map((option) => <option key={option}>{option}</option>)}
+                  </select>
+                )}
               </label>
-              <label className="select-control hide-small">
+              {activeMode !== "music" && <label className="select-control hide-small">
                 <span><Icon name="layers" size={17} /> Style</span>
                 <select defaultValue="Cinematic">
                   <option>Cinematic</option><option>Photoreal</option><option>Editorial</option><option>Anime</option>
                 </select>
-              </label>
+              </label>}
               <button className="settings-button" aria-label="Advanced generation settings">
                 <Icon name="sliders" size={20} />
               </button>
@@ -894,15 +922,25 @@ export default function Home() {
                 </label>
 
                 <div className="generator-control-grid">
-                  <label><span>Aspect</span><select value={generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9"} onChange={(event) => setVideoAspectRatio(event.target.value)}>{generatorAspectRatioOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-                  <label><span>Resolution</span><select value={generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p"} onChange={(event) => setVideoResolution(event.target.value)}>{generatorResolutionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-                  {activeMode === "video" && <label><span>Duration</span><select value={generatorDurationOptions.includes(videoDuration) ? videoDuration : generatorDurationOptions[0]} onChange={(event) => setVideoDuration(Number(event.target.value))}>{generatorDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}</select></label>}
+                  {activeMode === "music" ? (
+                    <>
+                      <label><span>Track length</span><select value={musicDurationOptions.includes(musicDuration) ? musicDuration : musicDurationOptions[0]} onChange={(event) => setMusicDuration(Number(event.target.value))}>{musicDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}</select></label>
+                      <label><span>Output</span><select value="MP3" aria-readonly="true"><option>MP3 audio</option></select></label>
+                    </>
+                  ) : (
+                    <>
+                      <label><span>Aspect</span><select value={generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9"} onChange={(event) => setVideoAspectRatio(event.target.value)}>{generatorAspectRatioOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+                      <label><span>Resolution</span><select value={generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p"} onChange={(event) => setVideoResolution(event.target.value)}>{generatorResolutionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+                      {activeMode === "video" && <label><span>Duration</span><select value={generatorDurationOptions.includes(videoDuration) ? videoDuration : generatorDurationOptions[0]} onChange={(event) => setVideoDuration(Number(event.target.value))}>{generatorDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}</select></label>}
+                    </>
+                  )}
                 </div>
 
                 <div className="generator-input-summary">
                   <span><Icon name="layers" size={17} /><b>{videoInputProfile.title}</b></span>
                   <small>{videoInputProfile.summary}</small>
                   <div>
+                    {videoInputProfile.slots.length === 0 && <i>Prompt only</i>}
                     {videoInputProfile.slots.map((slot) => (
                       <i key={slot.kind}>{references[slot.kind].length}/{slot.limit} {slot.kind}</i>
                     ))}
