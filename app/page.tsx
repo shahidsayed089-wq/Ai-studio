@@ -80,6 +80,10 @@ const getApiModelKey = (modelName: string) => {
     "ElevenLabs": "elevenlabs_voice",
     "Voice Forge": "voice_forge",
     "Multilingual Pro": "multilingual_pro",
+    "HeyGen Avatar IV": "heygen_avatar_iv",
+    "Avatar One": "avatar_one",
+    "Digital Twin": "digital_twin",
+    "Performance Capture": "performance_capture",
   };
   return keys[modelName] ?? modelName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 };
@@ -204,6 +208,52 @@ const getVideoInputProfile = (modelName: string): VideoInputProfile => {
   }
 };
 
+const getAvatarInputProfile = (modelName: string): VideoInputProfile => {
+  switch (modelName) {
+    case "HeyGen Avatar IV":
+      return {
+        title: "Photo avatar",
+        summary: "Clear-face photo required · script or optional voice audio",
+        totalLimit: 2,
+        slots: [
+          { kind: "images", label: "Add avatar photo", note: "One clear-face image · required", accept: "image/*", limit: 1 },
+          { kind: "audio", label: "Add voice audio", note: "Optional · overrides written script", accept: "audio/*", limit: 1 },
+        ],
+      };
+    case "Avatar One":
+      return {
+        title: "Audio-driven presenter",
+        summary: "Character image + voice audio · both required",
+        totalLimit: 2,
+        slots: [
+          { kind: "images", label: "Add presenter image", note: "Human, animal or character", accept: "image/*", limit: 1 },
+          { kind: "audio", label: "Add voice audio", note: "MP3, WAV, M4A or AAC", accept: "audio/*", limit: 1 },
+        ],
+      };
+    case "Digital Twin":
+      return {
+        title: "Digital twin performance",
+        summary: "Person image + voice audio under 30 seconds",
+        totalLimit: 2,
+        slots: [
+          { kind: "images", label: "Add person image", note: "One clear full or half-body image", accept: "image/*", limit: 1 },
+          { kind: "audio", label: "Add performance audio", note: "Required · maximum 30 seconds", accept: "audio/*", limit: 1 },
+        ],
+      };
+    case "Performance Capture":
+    default:
+      return {
+        title: "Motion transfer",
+        summary: "Character image + driving performance video",
+        totalLimit: 2,
+        slots: [
+          { kind: "images", label: "Add character image", note: "One visible full or half body", accept: "image/*", limit: 1 },
+          { kind: "videos", label: "Add motion video", note: "Driving performance · required", accept: "video/*", limit: 1 },
+        ],
+      };
+  }
+};
+
 const promptIdeas: Record<Mode, string> = {
   image: "A lone queen facing a molten celestial horizon, midnight landscape, cinematic 65mm film",
   video: "A masked rider enters a rain-soaked neon tunnel, low tracking shot, grounded IMAX realism",
@@ -308,9 +358,10 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
     { name: "Multilingual Pro", maker: "SHAZAN", tag: "Global", art: "ice", features: ["Multilingual speech", "Natural delivery"] },
   ],
   avatar: [
-    { name: "HeyGen Avatar IV", maker: "HEYGEN", tag: "Avatar", art: "portrait", features: ["Talking avatar", "Lip-sync"] },
-    { name: "Avatar One", maker: "SHAZAN", tag: "Live", art: "gold", features: ["Presenter", "Scene direction"] },
-    { name: "Digital Twin", maker: "SHAZAN", tag: "Custom", art: "ice", features: ["Identity", "Custom voice"] },
+    { name: "HeyGen Avatar IV", maker: "HEYGEN", tag: "Photo", art: "portrait", features: ["Photo + script", "Optional audio lip-sync"] },
+    { name: "Avatar One", maker: "SHAZAN", tag: "Presenter", art: "gold", features: ["Image + voice audio", "Talking characters"] },
+    { name: "Digital Twin", maker: "SHAZAN", tag: "Custom", art: "ice", features: ["Identity motion", "Audio-driven performance"] },
+    { name: "Performance Capture", maker: "SHAZAN", tag: "Motion", art: "sculpture", features: ["Character image", "Driving video transfer"] },
   ],
 };
 
@@ -367,6 +418,10 @@ const modelUniverse: { name: string; mode: Mode }[] = [
   { name: "ElevenLabs", mode: "voice" },
   { name: "Voice Forge", mode: "voice" },
   { name: "Multilingual Pro", mode: "voice" },
+  { name: "HeyGen Avatar IV", mode: "avatar" },
+  { name: "Avatar One", mode: "avatar" },
+  { name: "Digital Twin", mode: "avatar" },
+  { name: "Performance Capture", mode: "avatar" },
 ];
 
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
@@ -464,12 +519,16 @@ export default function Home() {
             totalLimit: 0,
             slots: [] as VideoInputSlot[],
           }
-        : getVideoInputProfile(model);
+        : activeMode === "avatar"
+          ? getAvatarInputProfile(model)
+          : getVideoInputProfile(model);
   const baseApiRate = creditModel === "kling" ? 0.07 : 0.057;
   const creditTotal = `$${(baseApiRate * creditDuration).toFixed(2)}+`;
   const creditMath = `$${baseApiRate.toFixed(3)}/sec base rate × ${creditDuration} sec`;
   const generatorBusy = generatorStatus === "uploading" || generatorStatus === "queued" || generatorStatus === "processing";
-  const generatorResolutionOptions = model === "Kling 3.0 Omni 4K"
+  const generatorResolutionOptions = activeMode === "avatar"
+    ? (model === "HeyGen Avatar IV" ? ["720p", "1080p"] : ["720p"])
+    : model === "Kling 3.0 Omni 4K"
     ? ["4K"]
     : model === "Gemini Omni Flash"
       ? ["720p"]
@@ -482,7 +541,9 @@ export default function Home() {
       : model === "Happy Horse 1.1"
         ? ["720p", "1080p"]
         : ["480p", "720p", "1080p", "4K"];
-  const generatorAspectRatioOptions = model === "Gemini Omni Flash" || model === "Grok Imagine Video 1.5"
+  const generatorAspectRatioOptions = activeMode === "avatar"
+    ? ["Source-driven"]
+    : model === "Gemini Omni Flash" || model === "Grok Imagine Video 1.5"
     ? ["16:9", "9:16"]
     : model.startsWith("Kling 3.0")
     ? ["16:9", "9:16", "1:1"]
@@ -575,9 +636,9 @@ export default function Home() {
       : promptIdeas[activeMode]);
     if (!prompt.trim()) setPrompt(nextPrompt);
 
-    if (activeMode === "video" || activeMode === "image" || activeMode === "music" || activeMode === "voice") {
+    if (activeMode === "video" || activeMode === "image" || activeMode === "music" || activeMode === "voice" || activeMode === "avatar") {
       if (generatorStatus === "failed") resetGenerator();
-      setGeneratorOutputType(activeMode === "music" || activeMode === "voice" ? "audio" : activeMode);
+      setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" || activeMode === "voice" ? "audio" : "video");
       setCreationReady(false);
       setVideoGeneratorOpen(true);
       return;
@@ -603,6 +664,20 @@ export default function Home() {
       setGeneratorStatus("failed");
       setGeneratorMessage(`${model} ke liye ek first-frame image required hai.`);
       return;
+    }
+    if (activeMode === "avatar") {
+      const missingImage = references.images.length === 0;
+      const missingAudio = (model === "Avatar One" || model === "Digital Twin") && references.audio.length === 0;
+      const missingVideo = model === "Performance Capture" && references.videos.length === 0;
+      if (missingImage || missingAudio || missingVideo) {
+        setGeneratorStatus("failed");
+        setGeneratorMessage(missingImage
+          ? `${model} ke liye character image required hai.`
+          : missingAudio
+            ? `${model} ke liye voice audio required hai.`
+            : "Performance Capture ke liye driving video required hai.");
+        return;
+      }
     }
 
     const runId = generatorRunRef.current + 1;
@@ -647,14 +722,18 @@ export default function Home() {
       const normalizedResolution = generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p";
       const argumentsPayload: Record<string, unknown> = {
         prompt: cleanPrompt,
-        aspect_ratio: generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9",
+        aspect_ratio: activeMode === "avatar" ? "source" : generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9",
         duration: activeMode === "music" ? musicDuration : videoDuration,
         resolution: normalizedResolution,
       };
 
       if (activeMode === "voice") argumentsPayload.voice = voicePreset;
 
-      if (activeMode === "image") {
+      if (activeMode === "avatar") {
+        if (imageReferences.length) argumentsPayload.image_references = imageReferences;
+        if (audioReferences.length) argumentsPayload.audio_references = audioReferences;
+        if (videoReferences.length) argumentsPayload.video_references = videoReferences;
+      } else if (activeMode === "image") {
         if (imageReferences.length) argumentsPayload.image_references = imageReferences;
       } else if (model.startsWith("Seedance 2.0")) {
         argumentsPayload.generate_audio = true;
@@ -806,11 +885,11 @@ export default function Home() {
               </button>
             </div>
 
-            {(activeMode === "image" || activeMode === "video") && (
+            {(activeMode === "image" || activeMode === "video" || activeMode === "avatar") && (
               <div className="reference-bay">
                 <div className="reference-head">
-                  <span><Icon name="layers" size={18} /><b>{activeMode === "video" ? videoInputProfile.title : "Image references"}</b></span>
-                  <small>{activeMode === "video"
+                  <span><Icon name="layers" size={18} /><b>{activeMode === "image" ? "Image references" : videoInputProfile.title}</b></span>
+                  <small>{activeMode !== "image"
                     ? `${videoInputProfile.summary} · ${referenceTotal}/${videoInputProfile.totalLimit} attached`
                     : `${references.images.length}/9 workspace slots · character, style or composition`}</small>
                   {referenceTotal > 0 && <button onClick={clearReferences}>Clear all</button>}
@@ -849,13 +928,15 @@ export default function Home() {
                 </select>
               </label>
               <label className="select-control">
-                <span><Icon name={activeMode === "music" ? "music" : activeMode === "voice" ? "voice" : "expand"} size={17} /> {activeMode === "music" ? "Track length" : activeMode === "voice" ? (model === "Voice Forge" ? "Mode" : "Voice") : "Aspect ratio"}</span>
+                <span><Icon name={activeMode === "music" ? "music" : activeMode === "voice" ? "voice" : "expand"} size={17} /> {activeMode === "music" ? "Track length" : activeMode === "voice" ? (model === "Voice Forge" ? "Mode" : "Voice") : activeMode === "avatar" ? "Framing" : "Aspect ratio"}</span>
                 {activeMode === "music" ? (
                   <select value={musicDurationOptions.includes(musicDuration) ? musicDuration : musicDurationOptions[0]} onChange={(event) => setMusicDuration(Number(event.target.value))}>
                     {musicDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}
                   </select>
                 ) : activeMode === "voice" ? (
                   model === "Voice Forge" ? <select defaultValue="Design preview"><option>Design preview</option></select> : <select value={voiceOptions.includes(voicePreset) ? voicePreset : voiceOptions[0]} onChange={(event) => setVoicePreset(event.target.value)}>{voiceOptions.map((option) => <option key={option}>{option}</option>)}</select>
+                ) : activeMode === "avatar" ? (
+                  <select value="Source-driven" aria-readonly="true"><option>Source-driven</option></select>
                 ) : (
                   <select value={videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}>
                     <option value="16:9">16:9 Widescreen</option><option value="9:16">9:16 Vertical</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Landscape</option>
@@ -865,12 +946,12 @@ export default function Home() {
               <label className="select-control">
                 <span><Icon name="cube" size={17} /> {activeMode === "music" || activeMode === "voice" ? "Format" : "Quality"}</span>
                 {activeMode === "music" || activeMode === "voice" ? <select defaultValue="MP3"><option>MP3</option></select> : (
-                  <select value={activeMode === "video" ? (generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p") : "2k"} onChange={(event) => { if (activeMode === "video") setVideoResolution(event.target.value); }}>
-                    {(activeMode === "video" ? generatorResolutionOptions : ["1k", "2k", "4k"]).map((option) => <option key={option}>{option}</option>)}
+                  <select value={activeMode === "video" || activeMode === "avatar" ? (generatorResolutionOptions.includes(videoResolution) ? videoResolution : generatorResolutionOptions[0]) : "2k"} onChange={(event) => { if (activeMode === "video" || activeMode === "avatar") setVideoResolution(event.target.value); }}>
+                    {(activeMode === "video" || activeMode === "avatar" ? generatorResolutionOptions : ["1k", "2k", "4k"]).map((option) => <option key={option}>{option}</option>)}
                   </select>
                 )}
               </label>
-              {activeMode !== "music" && activeMode !== "voice" && <label className="select-control hide-small">
+              {activeMode !== "music" && activeMode !== "voice" && activeMode !== "avatar" && <label className="select-control hide-small">
                 <span><Icon name="layers" size={17} /> Style</span>
                 <select defaultValue="Cinematic">
                   <option>Cinematic</option><option>Photoreal</option><option>Editorial</option><option>Anime</option>
@@ -956,6 +1037,11 @@ export default function Home() {
                     <>
                       {model === "Voice Forge" ? <label><span>Mode</span><select defaultValue="Design preview"><option>Design preview</option></select></label> : <label><span>Voice</span><select value={voiceOptions.includes(voicePreset) ? voicePreset : voiceOptions[0]} onChange={(event) => setVoicePreset(event.target.value)}>{voiceOptions.map((option) => <option key={option}>{option}</option>)}</select></label>}
                       <label><span>Output</span><select defaultValue="MP3"><option>MP3 audio</option></select></label>
+                    </>
+                  ) : activeMode === "avatar" ? (
+                    <>
+                      <label><span>Framing</span><select value="Source-driven" aria-readonly="true"><option>Source-driven</option></select></label>
+                      <label><span>Resolution</span><select value={generatorResolutionOptions.includes(videoResolution) ? videoResolution : generatorResolutionOptions[0]} onChange={(event) => setVideoResolution(event.target.value)}>{generatorResolutionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
                     </>
                   ) : (
                     <>
