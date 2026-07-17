@@ -39,11 +39,16 @@ The external token is added only by the Worker. Public responses use SHAZAN-faci
 - `veo_3_1` → matching Veo 3.1 text, image or reference endpoint
 - `happy_horse_1_1` → matching HappyHorse 1.1 text or image endpoint
 - Image models → GPT Image 2, Nano Banana 2 / Pro, Grok Imagine Image and FLUX 2 Pro
+- `lyria_3` → `fal-ai/lyria3`
+- `audioflow_elevenlabs` → `fal-ai/elevenlabs/music`
+- `minimax_music_2_5` → `fal-ai/minimax-music/v2.5`
+- `score_composer_cassetteai` → `CassetteAI/music-generator`
 
 Kie fallbacks:
 
 - `seedance_2_0_mini` → `bytedance/seedance-2-mini`
 - `kling_3_0_elements` → `kling-3.0/video` with one prompt-addressable video element
+- `suno` → Kie Suno `/api/v1/generate` and `/api/v1/generate/record-info`
 
 No per-model endpoint environment variables are required.
 
