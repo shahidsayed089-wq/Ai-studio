@@ -242,6 +242,38 @@ const buildFalImageTask = (model, args) => {
   return null;
 };
 
+const buildFalMusicTask = (model, args) => {
+  const prompt = args.prompt.trim();
+  const duration = normalizeDuration(args.duration, 30, 180, 30);
+
+  if (model === "lyria_3") {
+    return { provider: "fal", modelPath: "fal-ai/lyria3", input: { prompt } };
+  }
+  if (model === "audioflow_elevenlabs") {
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/elevenlabs/music",
+      input: {
+        prompt,
+        music_length_ms: duration * 1000,
+        force_instrumental: false,
+        output_format: "mp3_44100_128",
+      },
+    };
+  }
+  if (model === "minimax_music_2_5") {
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/minimax-music/v2.5",
+      input: { prompt, lyrics: "", lyrics_optimizer: true, is_instrumental: false },
+    };
+  }
+  if (model === "score_composer_cassetteai") {
+    return { provider: "fal", modelPath: "CassetteAI/music-generator", input: { prompt, duration } };
+  }
+  return null;
+};
+
 const buildFalTask = (model, args) => {
   if (model === "seedance_2_0_standard" || model === "seedance_2_0_fast") return buildFalSeedanceTask(model, args);
   if (model === "kling_3_0" || model === "kling_3_0_omni") return buildFalKlingTask(model, args);
@@ -249,7 +281,7 @@ const buildFalTask = (model, args) => {
   if (model === "grok_imagine_video_1_5") return buildFalGrokVideoTask(args);
   if (model === "happy_horse_1_1") return buildFalHappyHorseTask(args);
   if (model === "veo_3_1") return buildFalVeoTask(args);
-  return buildFalImageTask(model, args);
+  return buildFalImageTask(model, args) || buildFalMusicTask(model, args);
 };
 
 const buildKieSeedanceInput = (args) => {
@@ -456,6 +488,24 @@ const submitKieTask = async (env, apiKey, task) => {
   return json({ request_id: requestId, status: "queued", provider: "kie" });
 };
 
+const submitSunoTask = async (env, apiKey, args) => {
+  const response = await fetch(`${getKieApiBase(env)}/api/v1/generate`, {
+    method: "POST",
+    headers: kieHeaders(apiKey, { "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      prompt: args.prompt.trim().slice(0, 500),
+      customMode: false,
+      instrumental: false,
+      model: "V5",
+    }),
+  });
+  const payload = await readJson(response);
+  if (!response.ok) return upstreamError(payload, "Suno request accept nahi hui.");
+  const requestId = payload?.data?.taskId;
+  if (typeof requestId !== "string" || !requestId) return upstreamError(payload, "Suno request ID nahi mila.");
+  return json({ request_id: `suno.${requestId}`, status: "queued", provider: "kie" });
+};
+
 const handleGenerate = async (request, env, falKey, kieKey) => {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
   let body;
@@ -469,6 +519,14 @@ const handleGenerate = async (request, env, falKey, kieKey) => {
   if (!model || !args) return json({ error: "Model aur arguments required hain." }, 400);
   if (typeof args.prompt !== "string" || !args.prompt.trim() || args.prompt.length > 5000) {
     return json({ error: "Prompt 1–5000 characters ka hona chahiye." }, 400);
+  }
+
+  if (model === "suno") {
+    if (!kieKey) return json({
+      error: "Suno is not configured",
+      message: "Suno exact music route ke liye Cloudflare mein encrypted KIE_API_KEY add karein.",
+    }, 503);
+    return submitSunoTask(env, kieKey, args);
   }
 
   let task = falKey ? buildFalTask(model, args) : null;
@@ -516,6 +574,8 @@ const mediaTypeForUrl = (url, payload) => {
   if (/\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(url)) return "audio";
   return "image";
 };
+
+const preferredMediaUrl = (urls, preferredType) => urls.find((url) => mediaTypeForUrl(url, {}) === preferredType) || urls[0] || "";
 
 const handleFalStatus = async (request, env, apiKey, encodedRequest) => {
   const queueBase = (env.FAL_QUEUE_BASE_URL || FAL_QUEUE_BASE_URL).replace(/\/$/, "");
@@ -580,6 +640,27 @@ const handleKieStatus = async (request, env, apiKey, requestId) => {
   });
 };
 
+const handleSunoStatus = async (env, apiKey, requestId) => {
+  const response = await fetch(`${getKieApiBase(env)}/api/v1/generate/record-info?taskId=${encodeURIComponent(requestId)}`, { headers: kieHeaders(apiKey) });
+  const payload = await readJson(response);
+  if (!response.ok) return upstreamError(payload, "Suno status check unavailable.");
+  const task = payload?.data;
+  if (!task || typeof task !== "object") return upstreamError(payload, "Suno task status nahi mila.");
+
+  const rawStatus = String(task.status || task.response?.status || "PENDING").toUpperCase();
+  const failedStates = new Set(["CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION", "SENSITIVE_WORD_ERROR"]);
+  const status = rawStatus === "SUCCESS" ? "completed" : failedStates.has(rawStatus) ? "failed" : rawStatus === "PENDING" ? "queued" : "processing";
+  const resultUrls = collectResultUrls(task.response || task);
+  const outputUrl = preferredMediaUrl(resultUrls, "audio");
+  return json({
+    request_id: `suno.${requestId}`,
+    status: status === "completed" && !outputUrl ? "failed" : status,
+    output: outputUrl ? { url: outputUrl, type: "audio" } : undefined,
+    result_urls: resultUrls.length ? resultUrls : undefined,
+    error: status === "failed" ? getErrorMessage(task, "Suno generation failed.") : status === "completed" && !outputUrl ? "Suno completed but audio URL was missing." : undefined,
+  });
+};
+
 const handleStatus = async (request, env, falKey, kieKey, requestId) => {
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
   if (!/^[a-zA-Z0-9_.:-]{5,400}$/.test(requestId || "")) return json({ error: "Invalid request ID." }, 400);
@@ -587,6 +668,10 @@ const handleStatus = async (request, env, falKey, kieKey, requestId) => {
   if (falRequest) {
     if (!falKey) return json({ error: "FAL_KEY is not configured for this request." }, 503);
     return handleFalStatus(request, env, falKey, falRequest);
+  }
+  if (requestId.startsWith("suno.")) {
+    if (!kieKey) return json({ error: "KIE_API_KEY is not configured for this Suno request." }, 503);
+    return handleSunoStatus(env, kieKey, requestId.slice(5));
   }
   if (!kieKey) return json({ error: "KIE_API_KEY is not configured for this request." }, 503);
   return handleKieStatus(request, env, kieKey, requestId);
