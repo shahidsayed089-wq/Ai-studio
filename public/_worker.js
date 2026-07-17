@@ -28,16 +28,30 @@ const safeEqual = (left, right) => {
   return mismatch === 0;
 };
 
+const normalizeAccessCode = (value) => {
+  const code = typeof value === "string" ? value.trim() : "";
+  const first = code[0];
+  const last = code[code.length - 1];
+  return code.length >= 2 && ((first === '"' && last === '"') || (first === "'" && last === "'"))
+    ? code.slice(1, -1).trim()
+    : code;
+};
+
 const authorizeStudio = (request, env) => {
   if (env.STUDIO_ALLOW_PUBLIC === "true") return null;
-  if (!env.STUDIO_ACCESS_CODE) {
+  const configuredCode = normalizeAccessCode(env.STUDIO_ACCESS_CODE);
+  const enteredCode = normalizeAccessCode(request.headers.get("X-Studio-Access"));
+  if (!configuredCode) {
     return json({
       error: "Paid generation locked",
       message: "Cloudflare mein encrypted STUDIO_ACCESS_CODE add karein. Public credits ko safe rakhne ke liye generation default se locked hai.",
     }, 503);
   }
-  if (!safeEqual(request.headers.get("X-Studio-Access") || "", env.STUDIO_ACCESS_CODE)) {
-    return json({ error: "Owner access code galat hai." }, 401);
+  if (!safeEqual(enteredCode, configuredCode)) {
+    return json({
+      error: "Owner access code galat hai.",
+      message: "Live Production STUDIO_ACCESS_CODE se match nahi hua. Cloudflare Production secret ko update karke latest deployment retry karein.",
+    }, 401);
   }
   return null;
 };
