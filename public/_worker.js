@@ -296,6 +296,63 @@ const buildFalVoiceTask = (model, args) => {
   return null;
 };
 
+const buildFalAvatarTask = (model, args) => {
+  const image = getImageReferences(args, 1)[0];
+  const audio = cleanHttpsUrls(args.audio_references, 1)[0];
+  const video = cleanHttpsUrls(args.video_references, 1)[0];
+
+  if (model === "heygen_avatar_iv") {
+    if (!image) return { validationError: "HeyGen Avatar IV ke liye clear-face photo required hai." };
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/heygen/avatar4/image-to-video",
+      input: {
+        image_url: image,
+        prompt: args.prompt.trim(),
+        audio_url: audio || undefined,
+        talking_style: "expressive",
+        resolution: normalizeResolution(args.resolution, ["720p", "1080p"], "720p"),
+      },
+    };
+  }
+
+  if (model === "avatar_one") {
+    if (!image || !audio) return { validationError: "Avatar One ke liye ek character image aur ek voice audio required hai." };
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/kling-video/ai-avatar/v2/standard",
+      input: { image_url: image, audio_url: audio, prompt: args.prompt.trim() || "." },
+    };
+  }
+
+  if (model === "digital_twin") {
+    if (!image || !audio) return { validationError: "Digital Twin ke liye ek person image aur 30 second se chhota voice audio required hai." };
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/bytedance/omnihuman",
+      input: { image_url: image, audio_url: audio },
+    };
+  }
+
+  if (model === "performance_capture") {
+    if (!image || !video) return { validationError: "Performance Capture ke liye character image aur driving-performance video required hai." };
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/wan-motion",
+      input: {
+        image_url: image,
+        video_url: video,
+        prompt: args.prompt.trim(),
+        acceleration: "regular",
+        adapt_motion: true,
+        enable_safety_checker: true,
+      },
+    };
+  }
+
+  return null;
+};
+
 const buildFalTask = (model, args) => {
   if (model === "seedance_2_0_standard" || model === "seedance_2_0_fast") return buildFalSeedanceTask(model, args);
   if (model === "kling_3_0" || model === "kling_3_0_omni") return buildFalKlingTask(model, args);
@@ -303,7 +360,7 @@ const buildFalTask = (model, args) => {
   if (model === "grok_imagine_video_1_5") return buildFalGrokVideoTask(args);
   if (model === "happy_horse_1_1") return buildFalHappyHorseTask(args);
   if (model === "veo_3_1") return buildFalVeoTask(args);
-  return buildFalImageTask(model, args) || buildFalMusicTask(model, args) || buildFalVoiceTask(model, args);
+  return buildFalImageTask(model, args) || buildFalMusicTask(model, args) || buildFalVoiceTask(model, args) || buildFalAvatarTask(model, args);
 };
 
 const buildKieSeedanceInput = (args) => {
