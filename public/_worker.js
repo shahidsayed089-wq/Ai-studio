@@ -261,13 +261,6 @@ const buildFalMusicTask = (model, args) => {
       },
     };
   }
-  if (model === "minimax_music_2_5") {
-    return {
-      provider: "fal",
-      modelPath: "fal-ai/minimax-music/v2.5",
-      input: { prompt, lyrics: "", lyrics_optimizer: true, is_instrumental: false },
-    };
-  }
   if (model === "score_composer_cassetteai") {
     return { provider: "fal", modelPath: "CassetteAI/music-generator", input: { prompt, duration } };
   }
