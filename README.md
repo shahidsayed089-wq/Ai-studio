@@ -36,6 +36,7 @@ For the existing `ai-studio-1n1` project:
 Add encrypted secrets under **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** for Production and Preview:
 
 - `FAL_KEY` — primary private token for fal.ai queue and file storage
+- `OPENAI_API_KEY` — private OpenAI Speech API token for GPT Voice
 - `STUDIO_ACCESS_CODE` — temporary owner gate until user wallets are ready
 - `KIE_API_KEY` — optional fallback for models that are only connected through Kie
 
@@ -52,10 +53,13 @@ The bridge currently has verified fal.ai request mappings for:
 - Kling 3.0 Pro and Kling 3.0 Omni 4K
 - Veo 3.1 and HappyHorse 1.1
 - Lyria 3, AudioFlow, Suno and Score Composer
+- GPT Voice, ElevenLabs, Voice Forge and Multilingual Pro
 
 Kie remains an optional fallback for Seedance 2.0 Mini and Kling 3.0 Elements, and powers the separate exact Suno music route.
 
-AudioFlow and Score Composer are SHAZAN workflow names backed by server-side provider routes. Udio is not shown as connected because an exact official fal.ai endpoint has not been verified. Unconnected voice and avatar modes show a pending message instead of pretending that a render completed.
+AudioFlow and Score Composer are SHAZAN workflow names backed by server-side provider routes. Udio is not shown as connected because an exact official fal.ai endpoint has not been verified. Unconnected avatar modes show a pending message instead of pretending that a render completed.
+
+GPT Voice uses OpenAI's request-based Speech API because the current UI generates a bounded MP3, not a two-way realtime conversation. The interface discloses that voice output is AI-generated. Voice Forge is a SHAZAN voice-design workflow; ElevenLabs and Multilingual Pro use verified fal.ai TTS routes.
 
 ## Public-launch safety
 
