@@ -5,6 +5,19 @@ import { useMemo, useRef, useState } from "react";
 type Mode = "image" | "video" | "music" | "voice" | "avatar";
 type ReferenceKind = "images" | "videos" | "audio";
 type ReferenceFiles = Record<ReferenceKind, string[]>;
+type VideoInputSlot = {
+  kind: ReferenceKind;
+  label: string;
+  note: string;
+  accept: string;
+  limit: number;
+};
+type VideoInputProfile = {
+  title: string;
+  summary: string;
+  totalLimit: number;
+  slots: VideoInputSlot[];
+};
 type IconName =
   | Mode
   | "sparkle"
@@ -39,6 +52,65 @@ const modelMap: Record<Mode, string[]> = {
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
 };
 
+const emptyReferences = (): ReferenceFiles => ({ images: [], videos: [], audio: [] });
+
+const seedanceInputProfile: VideoInputProfile = {
+  title: "Multimodal references",
+  summary: "Seedance only · 9 images + 3 videos + 3 audio",
+  totalLimit: 12,
+  slots: [
+    { kind: "images", label: "Add images", note: "Max 9", accept: "image/*", limit: 9 },
+    { kind: "videos", label: "Add videos", note: "Max 3 · 15s each", accept: "video/*", limit: 3 },
+    { kind: "audio", label: "Add audio", note: "Max 3 · 15s each", accept: "audio/*", limit: 3 },
+  ],
+};
+
+const getVideoInputProfile = (modelName: string): VideoInputProfile => {
+  if (modelName.startsWith("Seedance 2.0")) return seedanceInputProfile;
+
+  switch (modelName) {
+    case "Kling 3.0 Omni":
+      return {
+        title: "Reference video",
+        summary: "Kling Omni · video-guided generation",
+        totalLimit: 1,
+        slots: [{ kind: "videos", label: "Add reference video", note: "One source clip", accept: "video/*", limit: 1 }],
+      };
+    case "Kling 3.0":
+      return {
+        title: "Frame controls",
+        summary: "Kling 3.0 · start and end frames",
+        totalLimit: 2,
+        slots: [{ kind: "images", label: "Add start / end frames", note: "Up to 2 images", accept: "image/*", limit: 2 }],
+      };
+    case "Veo 3.1":
+      return {
+        title: "Frame controls",
+        summary: "Veo 3.1 · first and last frame",
+        totalLimit: 2,
+        slots: [{ kind: "images", label: "Add first / last frames", note: "Up to 2 images", accept: "image/*", limit: 2 }],
+      };
+    case "Luma Ray3.14":
+      return {
+        title: "Source video",
+        summary: "Ray3.14 · video modify workflow",
+        totalLimit: 1,
+        slots: [{ kind: "videos", label: "Add source video", note: "One video input", accept: "video/*", limit: 1 }],
+      };
+    case "Runway Gen-4.5":
+    case "Sora 2":
+    case "Happy Horse 1.1":
+    case "Luma Ray3.2":
+    default:
+      return {
+        title: "First frame",
+        summary: `${modelName} · image-to-video`,
+        totalLimit: 1,
+        slots: [{ kind: "images", label: "Add first frame", note: "One image input", accept: "image/*", limit: 1 }],
+      };
+  }
+};
+
 const promptIdeas: Record<Mode, string> = {
   image: "A lone queen facing a molten celestial horizon, midnight landscape, cinematic 65mm film",
   video: "A masked rider enters a rain-soaked neon tunnel, low tracking shot, grounded IMAX realism",
@@ -58,7 +130,7 @@ const toolGroups = [
   {
     icon: "video" as IconName,
     label: "Video Studio",
-    description: "Multimodal text, image, audio and video generation with native sound, storyboards and character lock.",
+    description: "Model-specific video workflows: Seedance multimodal, Kling video and frame control, plus first-frame generation.",
     accent: "coral",
     meta: "11 video engines",
   },
@@ -121,16 +193,16 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
   ],
   video: [
     { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "credit mode · from 35 cr" },
-    { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["480p / 720p", "High-volume native A/V"], credits: "credit or unlimited mode" },
-    { name: "Seedance 2.0 Mini", maker: "BYTEDANCE", tag: "Mini", art: "ice", features: ["Lightweight generation", "Fast drafts + iteration"], credits: "provider rate at checkout" },
-    { name: "Kling 3.0 Omni", maker: "KLING", tag: "Omni", art: "sculpture", features: ["7 image or video reference", "Native audio · 15s"], credits: "6–16 cr / sec" },
-    { name: "Kling 3.0", maker: "KLING", tag: "Director", art: "portrait", features: ["Multi-shot", "Character lock", "15s"], credits: "6–12 cr / sec" },
-    { name: "Happy Horse 1.1", maker: "ALIBABA", tag: "1080p", art: "coral", features: ["T2V + I2V + reference", "Audio + lip-sync"] },
-    { name: "Sora 2", maker: "OPENAI", tag: "Audio", art: "world", features: ["Text + image", "Synced sound"] },
-    { name: "Veo 3.1", maker: "GOOGLE", tag: "Native A/V", art: "ice", features: ["Extend + keyframes", "Image direction"] },
-    { name: "Runway Gen-4.5", maker: "RUNWAY", tag: "Cinema", art: "gold", features: ["Text + image", "Motion control"] },
-    { name: "Luma Ray3.2", maker: "LUMA", tag: "Pro", art: "portrait", features: ["Frame control", "Cut continuity"] },
-    { name: "Luma Ray3.14", maker: "LUMA", tag: "Fast", art: "sculpture", features: ["Native 1080p", "Video modify"] },
+    { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["Unified multimodal inputs", "480p / 720p high volume"], credits: "credit or unlimited mode" },
+    { name: "Seedance 2.0 Mini", maker: "BYTEDANCE", tag: "Mini", art: "ice", features: ["Unified multimodal inputs", "Fast drafts + iteration"], credits: "provider rate at checkout" },
+    { name: "Kling 3.0 Omni", maker: "KLING", tag: "Omni", art: "sculpture", features: ["Reference video workflow", "Native audio · 15s"], credits: "6–16 cr / sec" },
+    { name: "Kling 3.0", maker: "KLING", tag: "Director", art: "portrait", features: ["Start + end frames", "Multi-shot · 15s"], credits: "6–12 cr / sec" },
+    { name: "Happy Horse 1.1", maker: "ALIBABA", tag: "1080p", art: "coral", features: ["Text or first frame", "Audio + lip-sync"] },
+    { name: "Sora 2", maker: "OPENAI", tag: "Audio", art: "world", features: ["First-frame image", "Synced sound"] },
+    { name: "Veo 3.1", maker: "GOOGLE", tag: "Native A/V", art: "ice", features: ["First + last frame", "Native A/V"] },
+    { name: "Runway Gen-4.5", maker: "RUNWAY", tag: "Cinema", art: "gold", features: ["First-frame image", "No native audio"] },
+    { name: "Luma Ray3.2", maker: "LUMA", tag: "Pro", art: "portrait", features: ["First-frame image", "Cut continuity"] },
+    { name: "Luma Ray3.14", maker: "LUMA", tag: "Fast", art: "sculpture", features: ["Source-video input", "Video modify"] },
   ],
   music: [
     { name: "Lyria 3", maker: "GOOGLE", tag: "Music", art: "gold", features: ["Text to music", "Instrumental control"] },
@@ -176,14 +248,14 @@ const creditCapabilities = {
   kling: {
     maker: "KLING AI",
     name: "Kling 3.0 Omni",
-    subtitle: "All-in-one reference, elements and native audio",
+    subtitle: "Video-guided generation with native audio",
     stats: [
-      ["7", "images"],
       ["1", "video"],
-      ["4", "refs with video"],
+      ["4", "elements with video"],
+      ["6", "camera cuts"],
       ["15s", "output"],
     ],
-    features: ["Text + images + video + reusable elements", "Native audio and multi-shot generation", "2–4 multi-angle images per character element", "5–30s voice clip can bind a character voice"],
+    features: ["Reference-video workflow", "Optional reusable character or product elements", "Native audio and multi-shot generation", "Start and end frame control in Kling 3.0 mode"],
   },
 } as const;
 
@@ -255,7 +327,7 @@ export default function Home() {
   const [creditDuration, setCreditDuration] = useState(5);
   const [creditVideoInput, setCreditVideoInput] = useState(false);
   const [creditNativeAudio, setCreditNativeAudio] = useState(true);
-  const [references, setReferences] = useState<ReferenceFiles>({ images: [], videos: [], audio: [] });
+  const [references, setReferences] = useState<ReferenceFiles>(emptyReferences);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const currentMode = useMemo(
@@ -265,7 +337,7 @@ export default function Home() {
 
   const currentCreditCapability = creditCapabilities[creditModel];
   const referenceTotal = references.images.length + references.videos.length + references.audio.length;
-  const isSeedance = activeMode === "video" && model.startsWith("Seedance 2.0");
+  const videoInputProfile = getVideoInputProfile(model);
   const klingResolution = creditResolution === "1080p" ? "1080p" : "720p";
   const klingRate = creditVideoInput
     ? (klingResolution === "1080p" ? 16 : 12)
@@ -301,13 +373,10 @@ export default function Home() {
     });
   };
 
-  const addReferences = (kind: ReferenceKind, files: FileList | null, kindLimit: number) => {
+  const addReferences = (kind: ReferenceKind, files: FileList | null, kindLimit: number, totalLimit: number) => {
     if (!files?.length) return;
     setReferences((current) => {
-      const currentTotal = activeMode === "video"
-        ? current.images.length + current.videos.length + current.audio.length
-        : current.images.length;
-      const totalLimit = activeMode === "video" ? 12 : 9;
+      const currentTotal = current.images.length + current.videos.length + current.audio.length;
       const openTotalSlots = Math.max(0, totalLimit - currentTotal);
       const openKindSlots = Math.max(0, kindLimit - current[kind].length);
       const accepted = Array.from(files)
@@ -318,11 +387,17 @@ export default function Home() {
     });
   };
 
-  const clearReferences = () => setReferences({ images: [], videos: [], audio: [] });
+  const clearReferences = () => setReferences(emptyReferences());
+
+  const changeModel = (value: string) => {
+    setModel(value);
+    clearReferences();
+  };
 
   const switchMode = (mode: Mode) => {
     setActiveMode(mode);
     setModel(modelMap[mode][0]);
+    clearReferences();
     setCreationReady(false);
   };
 
@@ -431,39 +506,34 @@ export default function Home() {
             {(activeMode === "image" || activeMode === "video") && (
               <div className="reference-bay">
                 <div className="reference-head">
-                  <span><Icon name="layers" size={18} /><b>{activeMode === "video" ? "Multimodal references" : "Image references"}</b></span>
+                  <span><Icon name="layers" size={18} /><b>{activeMode === "video" ? videoInputProfile.title : "Image references"}</b></span>
                   <small>{activeMode === "video"
-                    ? isSeedance
-                      ? `Seedance · ${referenceTotal}/12 assets total`
-                      : `${referenceTotal} attached · selected model limits apply`
+                    ? `${videoInputProfile.summary} · ${referenceTotal}/${videoInputProfile.totalLimit} attached`
                     : `${references.images.length}/9 workspace slots · character, style or composition`}</small>
                   {referenceTotal > 0 && <button onClick={clearReferences}>Clear all</button>}
                 </div>
 
-                <div className={`reference-slots ${activeMode === "image" ? "image-only" : ""}`}>
-                  <label className={references.images.length ? "reference-upload has-files" : "reference-upload"}>
-                    <input type="file" accept="image/*" multiple onChange={(event) => { addReferences("images", event.currentTarget.files, 9); event.currentTarget.value = ""; }} />
-                    <Icon name="image" size={19} />
-                    <span><b>{references.images.length ? `${references.images.length} attached` : "Add images"}</b><small>{activeMode === "video" ? "Seedance max 9" : "9 workspace slots"}</small></span>
-                    <em>+</em>
-                  </label>
-
-                  {activeMode === "video" && (
-                    <>
-                      <label className={references.videos.length ? "reference-upload has-files" : "reference-upload"}>
-                        <input type="file" accept="video/*" multiple onChange={(event) => { addReferences("videos", event.currentTarget.files, 3); event.currentTarget.value = ""; }} />
-                        <Icon name="video" size={19} />
-                        <span><b>{references.videos.length ? `${references.videos.length} attached` : "Add videos"}</b><small>Seedance max 3 · 15s</small></span>
-                        <em>+</em>
-                      </label>
-                      <label className={references.audio.length ? "reference-upload has-files" : "reference-upload"}>
-                        <input type="file" accept="audio/*" multiple onChange={(event) => { addReferences("audio", event.currentTarget.files, 3); event.currentTarget.value = ""; }} />
-                        <Icon name="music" size={19} />
-                        <span><b>{references.audio.length ? `${references.audio.length} attached` : "Add audio"}</b><small>Seedance max 3 · 15s</small></span>
-                        <em>+</em>
-                      </label>
-                    </>
-                  )}
+                <div className={`reference-slots ${activeMode === "image" || videoInputProfile.slots.length === 1 ? "single-slot" : ""}`}>
+                  {activeMode === "image" ? (
+                    <label className={references.images.length ? "reference-upload has-files" : "reference-upload"}>
+                      <input type="file" accept="image/*" multiple onChange={(event) => { addReferences("images", event.currentTarget.files, 9, 9); event.currentTarget.value = ""; }} />
+                      <Icon name="image" size={19} />
+                      <span><b>{references.images.length ? `${references.images.length} attached` : "Add images"}</b><small>9 workspace slots</small></span>
+                      <em>+</em>
+                    </label>
+                  ) : videoInputProfile.slots.map((slot) => (
+                    <label className={references[slot.kind].length ? "reference-upload has-files" : "reference-upload"} key={`${model}-${slot.kind}`}>
+                      <input
+                        type="file"
+                        accept={slot.accept}
+                        multiple={slot.limit > 1}
+                        onChange={(event) => { addReferences(slot.kind, event.currentTarget.files, slot.limit, videoInputProfile.totalLimit); event.currentTarget.value = ""; }}
+                      />
+                      <Icon name={slot.kind === "images" ? "image" : slot.kind === "videos" ? "video" : "music"} size={19} />
+                      <span><b>{references[slot.kind].length ? `${references[slot.kind].length} attached` : slot.label}</b><small>{slot.note}</small></span>
+                      <em>+</em>
+                    </label>
+                  ))}
                 </div>
               </div>
             )}
@@ -471,7 +541,7 @@ export default function Home() {
             <div className="control-row">
               <label className="select-control model-control">
                 <span><Icon name="sparkle" size={18} /> Model</span>
-                <select value={model} onChange={(event) => setModel(event.target.value)}>
+                <select value={model} onChange={(event) => changeModel(event.target.value)}>
                   {modelMap[activeMode].map((item) => <option key={item}>{item}</option>)}
                 </select>
               </label>
@@ -529,7 +599,7 @@ export default function Home() {
             <p className="kicker">LIVE MODEL LIBRARY · JULY 2026</p>
             <h2 id="latest-models-title">Every frontier model.<br /><em>One command center.</em></h2>
           </div>
-          <p>Switch engines without rebuilding your prompt. Image and multimodal video models sit inside the same cinematic workflow.</p>
+          <p>Switch engines without rebuilding your prompt. Every video model exposes only the input controls it actually supports.</p>
         </div>
 
         <div className="latest-model-groups">
@@ -553,7 +623,7 @@ export default function Home() {
           <article className="latest-model-family video-family">
             <header>
               <span className="family-icon"><Icon name="video" size={24} /></span>
-              <span><small>MULTIMODAL VIDEO + NATIVE AUDIO</small><b>Director-grade Video Models</b></span>
+              <span><small>MODEL-SPECIFIC VIDEO INPUTS</small><b>Director-grade Video Models</b></span>
               <em>{modelCatalog.video.length} models</em>
             </header>
             <div className="latest-card-grid video-model-grid">
@@ -608,7 +678,7 @@ export default function Home() {
             <p className="ledger-note">
               {creditModel === "seedance"
                 ? "Use up to 12 assets total in one instruction, within per-type caps of 9 images, 3 videos and 3 audio clips."
-                : "With a video input, Kling allows up to four additional images/elements; without video, up to seven."}
+                : "Kling Omni uses a video-guided workflow. This is not presented as Seedance-style image + video + audio multimodal input."}
             </p>
           </article>
 

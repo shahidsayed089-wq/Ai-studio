@@ -494,7 +494,7 @@ a {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.reference-slots.image-only { grid-template-columns: minmax(190px, 320px); }
+.reference-slots.single-slot { grid-template-columns: minmax(240px, 520px); }
 
 .reference-upload {
   align-items: center;
@@ -1942,7 +1942,7 @@ footer > small { justify-self: end; }
   .reference-head { padding: 2px 3px; }
   .reference-head > span { font-size: 10px; }
   .reference-slots { gap: 6px; }
-  .reference-slots.image-only { grid-template-columns: 1fr; }
+  .reference-slots.single-slot { grid-template-columns: 1fr; }
   .reference-upload {
     gap: 5px;
     grid-template-columns: 1fr;
