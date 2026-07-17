@@ -1,48 +1,48 @@
 # Cloudflare deployment
 
-The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as a Next.js static export with a secure Higgsfield bridge.
+The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as a Next.js static export with a private SHAZAN generation bridge.
 
 ## Build settings
 
 1. Production branch: `main`
 2. Build command: `npm run build`
 3. Build output directory: `out`
-4. Node.js: 22
+4. Node.js: `22`
 
-The server bridge is located at `public/_worker.js`. Next copies it to `out/_worker.js`, which Cloudflare Pages deploys in Advanced Mode. The Worker handles only `/api/higgsfield/*`; every other request is forwarded to the static site through `env.ASSETS`.
+`public/_worker.js` is copied to `out/_worker.js` and runs through Cloudflare Pages Advanced Mode. It handles only `/api/studio/*`; every other request is forwarded to static assets through `env.ASSETS`.
 
 ## Required encrypted secrets
 
-Add these in **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** for both Production and Preview:
+Open **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** and add these to both Production and Preview:
 
-- `HIGGSFIELD_API_ID`: Higgsfield `KEY_ID` / API ID.
-- `HIGGSFIELD_API_KEY`: Higgsfield `KEY_SECRET` / API secret.
-- `STUDIO_ACCESS_CODE`: a long private code entered in the generator before a paid render.
+- `KIE_API_KEY`: one private API token from the model gateway.
+- `STUDIO_ACCESS_CODE`: a long private beta code entered in the generator before a paid render.
 
-The bridge also accepts Higgsfield's official `HF_API_KEY` + `HF_API_SECRET` or combined `HF_CREDENTIALS=KEY_ID:KEY_SECRET` naming.
+Set `KIE_API_KEY` to **Secret**, not plain text. Never add the token to GitHub, browser code, screenshots or chat.
 
-## Model IDs
+## Routes
 
-Higgsfield's key/secret REST API submits to `https://platform.higgsfield.ai/{model_id}`. Configure only the exact model IDs enabled in your Higgsfield API dashboard:
+- `POST /api/studio/upload` — temporarily uploads a reference asset.
+- `POST /api/studio/generate` — validates the SHAZAN model key and creates an asynchronous task.
+- `GET /api/studio/status/:requestId` — normalizes task progress and result URLs.
 
-- `HIGGSFIELD_SEEDANCE_2_STANDARD_ENDPOINT`
-- `HIGGSFIELD_SEEDANCE_2_FAST_ENDPOINT`
-- `HIGGSFIELD_SEEDANCE_2_MINI_ENDPOINT`
-- `HIGGSFIELD_KLING_3_OMNI_ENDPOINT`
-- `HIGGSFIELD_KLING_3_ENDPOINT`
-- `HIGGSFIELD_RUNWAY_GEN_4_5_ENDPOINT`
+The external token is added only by the Worker. Public responses use SHAZAN-facing names and generic errors.
 
-Alternatively, use one text variable:
+## Connected model IDs
 
-```text
-HIGGSFIELD_MODEL_ENDPOINTS={"seedance_2_0_standard":"provider/model/path","kling_3_0":"provider/model/path"}
-```
+- `seedance_2_0_standard` → `bytedance/seedance-2`
+- `seedance_2_0_fast` → `bytedance/seedance-2-fast`
+- `seedance_2_0_mini` → `bytedance/seedance-2-mini`
+- `kling_3_0_elements` → `kling-3.0/video` with a prompt-addressable video element
+- `kling_3_0` → `kling-3.0/video` with optional first and last frames
+- `happy_horse_1_1` → the appropriate HappyHorse 1.1 text/image/reference workflow
 
-Do not guess model IDs. Higgsfield's modern Cloud/CLI catalog and its public key/secret REST catalog are separate surfaces and do not always expose the same models.
+No per-model endpoint environment variables are required.
 
 ## Optional variables
 
-- `HIGGSFIELD_API_BASE_URL`: defaults to `https://platform.higgsfield.ai`.
-- `HIGGSFIELD_ALLOW_PUBLIC=true`: removes the owner-code check. Do not enable this until user authentication, billing, and rate limits exist.
+- `KIE_API_BASE_URL`: defaults to `https://api.kie.ai`.
+- `KIE_UPLOAD_BASE_URL`: defaults to `https://kieai.redpandaai.co`.
+- `STUDIO_ALLOW_PUBLIC=true`: removes the owner-code check. Do not enable until authentication, billing, quotas and rate limits exist.
 
-Never commit real credentials and never prefix secrets with `NEXT_PUBLIC_`.
+Generated media is temporary upstream. Copy completed customer assets to durable SHAZAN storage before a full public launch.
