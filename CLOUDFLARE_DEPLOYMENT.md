@@ -20,7 +20,7 @@ Open **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets*
 - `STUDIO_ACCESS_CODE`: a long temporary owner-only generation code.
 - `KIE_API_KEY`: optional Kie fallback token for Seedance Mini and Kling Elements.
 
-Set all three to **Secret**, not plain text. Never add tokens to GitHub, browser code, screenshots or chat.
+Set every token and access code to **Secret**, not plain text. Never add tokens to GitHub, browser code, screenshots or chat.
 
 ## Routes
 
@@ -46,6 +46,10 @@ The external token is added only by the Worker. Public responses use SHAZAN-faci
 - `elevenlabs_voice` → `fal-ai/elevenlabs/tts/eleven-v3`
 - `voice_forge` → `fal-ai/elevenlabs/text-to-voice/design/eleven-v3`
 - `multilingual_pro` → `fal-ai/elevenlabs/tts/multilingual-v2`
+- `heygen_avatar_iv` → `fal-ai/heygen/avatar4/image-to-video`
+- `avatar_one` → `fal-ai/kling-video/ai-avatar/v2/standard`
+- `digital_twin` → `fal-ai/bytedance/omnihuman`
+- `performance_capture` → `fal-ai/wan-motion`
 
 OpenAI voice route:
 
