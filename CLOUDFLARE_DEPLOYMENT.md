@@ -41,7 +41,6 @@ The external token is added only by the Worker. Public responses use SHAZAN-faci
 - Image models → GPT Image 2, Nano Banana 2 / Pro, Grok Imagine Image and FLUX 2 Pro
 - `lyria_3` → `fal-ai/lyria3`
 - `audioflow_elevenlabs` → `fal-ai/elevenlabs/music`
-- `minimax_music_2_5` → `fal-ai/minimax-music/v2.5`
 - `score_composer_cassetteai` → `CassetteAI/music-generator`
 
 Kie fallbacks:
