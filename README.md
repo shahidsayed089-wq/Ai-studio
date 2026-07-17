@@ -2,7 +2,7 @@
 
 Premium multi-model generative AI studio built with Next.js static export and Cloudflare Pages Advanced Mode.
 
-The public product and UI remain SHAZAN AI. A server-side model gateway handles paid requests without exposing its API token or sending users to an external provider login.
+The public product and UI remain SHAZAN AI. A server-side Cloudflare Worker routes paid requests without exposing provider tokens or sending users to an external provider login.
 
 ## Local development
 
@@ -35,23 +35,27 @@ For the existing `ai-studio-1n1` project:
 
 Add encrypted secrets under **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** for Production and Preview:
 
-- `KIE_API_KEY` — the private model-gateway token
-- `STUDIO_ACCESS_CODE` — an owner-only beta code
+- `FAL_KEY` — primary private token for fal.ai queue and file storage
+- `STUDIO_ACCESS_CODE` — temporary owner gate until user wallets are ready
+- `KIE_API_KEY` — optional fallback for models that are only connected through Kie
 
 Never commit API keys, paste them into client code, or expose them through `NEXT_PUBLIC_` variables.
 
-## Connected video models
+## Connected models
 
-The bridge currently has verified request mappings for:
+The bridge currently has verified fal.ai request mappings for:
 
-- Seedance 2.0 Standard — `bytedance/seedance-2`
-- Seedance 2.0 Fast — `bytedance/seedance-2-fast`
-- Seedance 2.0 Mini — `bytedance/seedance-2-mini`
-- Kling 3.0 / Kling 3.0 Elements — `kling-3.0/video`
-- HappyHorse 1.1 — text, image, or reference-to-video selected from the attached inputs
+- GPT Image 2, Nano Banana 2 / Pro, Grok Imagine Image and FLUX 2 Pro
+- Seedance 2.0 Standard / Fast, with text, image and reference workflows selected from actual inputs
+- Gemini Omni Flash — text-to-video or image-reference-to-video
+- Grok Imagine Video 1.5 — exact image-to-video endpoint
+- Kling 3.0 Pro and Kling 3.0 Omni 4K
+- Veo 3.1 and HappyHorse 1.1
 
-Other catalogue cards remain visible for product design, but the Worker returns an honest “not connected” response instead of pretending to submit an unsupported model.
+Kie remains an optional fallback for Seedance 2.0 Mini and Kling 3.0 Elements.
+
+Unconnected music, voice and avatar modes show a pending message instead of pretending that a render completed.
 
 ## Public-launch safety
 
-Paid generation is owner-only by default. Do not set `STUDIO_ALLOW_PUBLIC=true` until SHAZAN user authentication, a credit wallet, per-user quotas, rate limiting and abuse controls are connected.
+Paid generation is owner-gated by default. Do not set `STUDIO_ALLOW_PUBLIC=true` until SHAZAN authentication, a per-user credit wallet, quotas and abuse controls are live.
