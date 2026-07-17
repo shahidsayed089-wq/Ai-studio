@@ -3,6 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 
 type Mode = "image" | "video" | "music" | "voice" | "avatar";
+type ReferenceKind = "images" | "videos" | "audio";
+type ReferenceFiles = Record<ReferenceKind, string[]>;
 type IconName =
   | Mode
   | "sparkle"
@@ -31,7 +33,7 @@ const modes: { id: Mode; label: string; placeholder: string }[] = [
 
 const modelMap: Record<Mode, string[]> = {
   image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Nano Banana 2 Lite", "Luma UNI-1.1", "FLUX Pro"],
-  video: ["Seedance 2.0", "Kling 3.0 Omni", "Kling 3.0", "Happy Horse 1.1", "Sora 2", "Veo 3.1", "Runway Gen-4.5", "Luma Ray3.2", "Luma Ray3.14"],
+  video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Kling 3.0 Omni", "Kling 3.0", "Happy Horse 1.1", "Sora 2", "Veo 3.1", "Runway Gen-4.5", "Luma Ray3.2", "Luma Ray3.14"],
   music: ["Lyria 3", "AudioFlow", "Suno", "Udio", "Score Composer"],
   voice: ["GPT Realtime Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
@@ -58,7 +60,7 @@ const toolGroups = [
     label: "Video Studio",
     description: "Multimodal text, image, audio and video generation with native sound, storyboards and character lock.",
     accent: "coral",
-    meta: "9 video engines",
+    meta: "11 video engines",
   },
   {
     icon: "music" as IconName,
@@ -118,7 +120,9 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
     { name: "FLUX Pro", maker: "BLACK FOREST", tag: "Photo", art: "world", features: ["Photoreal", "Typography"] },
   ],
   video: [
-    { name: "Seedance 2.0", maker: "BYTEDANCE", tag: "4-Modal", art: "gold", features: ["9 image + 3 video + 3 audio", "15s native A/V"], credits: "from 35 cr / render" },
+    { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "credit mode · from 35 cr" },
+    { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["480p / 720p", "High-volume native A/V"], credits: "credit or unlimited mode" },
+    { name: "Seedance 2.0 Mini", maker: "BYTEDANCE", tag: "Mini", art: "ice", features: ["Lightweight generation", "Fast drafts + iteration"], credits: "provider rate at checkout" },
     { name: "Kling 3.0 Omni", maker: "KLING", tag: "Omni", art: "sculpture", features: ["7 image or video reference", "Native audio · 15s"], credits: "6–16 cr / sec" },
     { name: "Kling 3.0", maker: "KLING", tag: "Director", art: "portrait", features: ["Multi-shot", "Character lock", "15s"], credits: "6–12 cr / sec" },
     { name: "Happy Horse 1.1", maker: "ALIBABA", tag: "1080p", art: "coral", features: ["T2V + I2V + reference", "Audio + lip-sync"] },
@@ -159,8 +163,8 @@ const seedancePricing: Record<CreditResolution, { base: number; video: [number, 
 const creditCapabilities = {
   seedance: {
     maker: "BYTEDANCE SEED",
-    name: "Seedance 2.0",
-    subtitle: "Unified 4-modal audio-video generation",
+    name: "Seedance 2.0 Standard",
+    subtitle: "Highest-fidelity unified 4-modal generation",
     stats: [
       ["9", "images"],
       ["3", "videos"],
@@ -187,7 +191,9 @@ const modelUniverse: { name: string; mode: Mode }[] = [
   { name: "GPT Image 2", mode: "image" },
   { name: "Nano Banana 2", mode: "image" },
   { name: "Nano Banana Pro", mode: "image" },
-  { name: "Seedance 2.0", mode: "video" },
+  { name: "Seedance 2.0 Standard", mode: "video" },
+  { name: "Seedance 2.0 Fast", mode: "video" },
+  { name: "Seedance 2.0 Mini", mode: "video" },
   { name: "Kling 3.0 Omni", mode: "video" },
   { name: "Happy Horse 1.1", mode: "video" },
   { name: "Sora 2", mode: "video" },
@@ -249,6 +255,7 @@ export default function Home() {
   const [creditDuration, setCreditDuration] = useState(5);
   const [creditVideoInput, setCreditVideoInput] = useState(false);
   const [creditNativeAudio, setCreditNativeAudio] = useState(true);
+  const [references, setReferences] = useState<ReferenceFiles>({ images: [], videos: [], audio: [] });
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const currentMode = useMemo(
@@ -257,6 +264,8 @@ export default function Home() {
   );
 
   const currentCreditCapability = creditCapabilities[creditModel];
+  const referenceTotal = references.images.length + references.videos.length + references.audio.length;
+  const isSeedance = activeMode === "video" && model.startsWith("Seedance 2.0");
   const klingResolution = creditResolution === "1080p" ? "1080p" : "720p";
   const klingRate = creditVideoInput
     ? (klingResolution === "1080p" ? 16 : 12)
@@ -291,6 +300,25 @@ export default function Home() {
       return nextValue;
     });
   };
+
+  const addReferences = (kind: ReferenceKind, files: FileList | null, kindLimit: number) => {
+    if (!files?.length) return;
+    setReferences((current) => {
+      const currentTotal = activeMode === "video"
+        ? current.images.length + current.videos.length + current.audio.length
+        : current.images.length;
+      const totalLimit = activeMode === "video" ? 12 : 9;
+      const openTotalSlots = Math.max(0, totalLimit - currentTotal);
+      const openKindSlots = Math.max(0, kindLimit - current[kind].length);
+      const accepted = Array.from(files)
+        .map((file) => file.name)
+        .filter((name) => !current[kind].includes(name))
+        .slice(0, Math.min(openTotalSlots, openKindSlots));
+      return accepted.length ? { ...current, [kind]: [...current[kind], ...accepted] } : current;
+    });
+  };
+
+  const clearReferences = () => setReferences({ images: [], videos: [], audio: [] });
 
   const switchMode = (mode: Mode) => {
     setActiveMode(mode);
@@ -399,6 +427,46 @@ export default function Home() {
                 {generating ? "Creating..." : "Generate"}
               </button>
             </div>
+
+            {(activeMode === "image" || activeMode === "video") && (
+              <div className="reference-bay">
+                <div className="reference-head">
+                  <span><Icon name="layers" size={18} /><b>{activeMode === "video" ? "Multimodal references" : "Image references"}</b></span>
+                  <small>{activeMode === "video"
+                    ? isSeedance
+                      ? `Seedance · ${referenceTotal}/12 assets total`
+                      : `${referenceTotal} attached · selected model limits apply`
+                    : `${references.images.length}/9 workspace slots · character, style or composition`}</small>
+                  {referenceTotal > 0 && <button onClick={clearReferences}>Clear all</button>}
+                </div>
+
+                <div className={`reference-slots ${activeMode === "image" ? "image-only" : ""}`}>
+                  <label className={references.images.length ? "reference-upload has-files" : "reference-upload"}>
+                    <input type="file" accept="image/*" multiple onChange={(event) => { addReferences("images", event.currentTarget.files, 9); event.currentTarget.value = ""; }} />
+                    <Icon name="image" size={19} />
+                    <span><b>{references.images.length ? `${references.images.length} attached` : "Add images"}</b><small>{activeMode === "video" ? "Seedance max 9" : "9 workspace slots"}</small></span>
+                    <em>+</em>
+                  </label>
+
+                  {activeMode === "video" && (
+                    <>
+                      <label className={references.videos.length ? "reference-upload has-files" : "reference-upload"}>
+                        <input type="file" accept="video/*" multiple onChange={(event) => { addReferences("videos", event.currentTarget.files, 3); event.currentTarget.value = ""; }} />
+                        <Icon name="video" size={19} />
+                        <span><b>{references.videos.length ? `${references.videos.length} attached` : "Add videos"}</b><small>Seedance max 3 · 15s</small></span>
+                        <em>+</em>
+                      </label>
+                      <label className={references.audio.length ? "reference-upload has-files" : "reference-upload"}>
+                        <input type="file" accept="audio/*" multiple onChange={(event) => { addReferences("audio", event.currentTarget.files, 3); event.currentTarget.value = ""; }} />
+                        <Icon name="music" size={19} />
+                        <span><b>{references.audio.length ? `${references.audio.length} attached` : "Add audio"}</b><small>Seedance max 3 · 15s</small></span>
+                        <em>+</em>
+                      </label>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="control-row">
               <label className="select-control model-control">
@@ -512,7 +580,7 @@ export default function Home() {
 
         <div className="credit-model-tabs" role="tablist" aria-label="Credit model">
           <button className={creditModel === "seedance" ? "active" : ""} onClick={() => selectCreditModel("seedance")} role="tab" aria-selected={creditModel === "seedance"}>
-            <span><Icon name="video" size={20} /></span><b>Seedance 2.0</b><small>from 35 credits</small>
+            <span><Icon name="video" size={20} /></span><b>Seedance 2.0 Standard</b><small>from 35 credits</small>
           </button>
           <button className={creditModel === "kling" ? "active" : ""} onClick={() => selectCreditModel("kling")} role="tab" aria-selected={creditModel === "kling"}>
             <span><Icon name="layers" size={20} /></span><b>Kling 3.0 Omni</b><small>6–16 credits/sec</small>
@@ -539,7 +607,7 @@ export default function Home() {
 
             <p className="ledger-note">
               {creditModel === "seedance"
-                ? "All 15 references can be mixed with one natural-language instruction in the same generation."
+                ? "Use up to 12 assets total in one instruction, within per-type caps of 9 images, 3 videos and 3 audio clips."
                 : "With a video input, Kling allows up to four additional images/elements; without video, up to seven."}
             </p>
           </article>
