@@ -1,22 +1,48 @@
 # Cloudflare deployment
 
-This repository is configured for the existing `ai-studio-1n1` Cloudflare Pages project through Next.js static export.
+The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as a Next.js static export with a Pages Function for the secure Higgsfield bridge.
 
-## Connect the repository
+## Build settings
 
-1. Open Cloudflare Dashboard → Workers & Pages → `ai-studio-1n1`.
-2. Open **Settings → Builds & deployments**.
-3. Select production branch `main`.
-4. Set the build command to `npm run build`.
-5. Set the build output directory to `out`.
-6. Use Node.js 22 and save the configuration.
-7. Retry the latest deployment.
+1. Production branch: `main`
+2. Build command: `npm run build`
+3. Build output directory: `out`
+4. Node.js: 22
 
-## Secrets
+The server function is located at `functions/api/higgsfield/[[path]].js`. Cloudflare deploys it alongside the static `out` directory.
 
-Add these under **Settings → Variables and Secrets** after the server-side Pages Function is connected:
+## Required encrypted secrets
 
-- `HIGGSFIELD_API_KEY` as an encrypted secret.
-- `HIGGSFIELD_API_BASE_URL` as an optional text variable.
+Add these in **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** for both Production and Preview:
 
-Never commit real API keys to GitHub and never prefix a secret with `NEXT_PUBLIC_`.
+- `HIGGSFIELD_API_ID`: Higgsfield `KEY_ID` / API ID.
+- `HIGGSFIELD_API_KEY`: Higgsfield `KEY_SECRET` / API secret.
+- `STUDIO_ACCESS_CODE`: a long private code entered in the generator before a paid render.
+
+The bridge also accepts Higgsfield's official `HF_API_KEY` + `HF_API_SECRET` or combined `HF_CREDENTIALS=KEY_ID:KEY_SECRET` naming.
+
+## Model IDs
+
+Higgsfield's key/secret REST API submits to `https://platform.higgsfield.ai/{model_id}`. Configure only the exact model IDs enabled in your Higgsfield API dashboard:
+
+- `HIGGSFIELD_SEEDANCE_2_STANDARD_ENDPOINT`
+- `HIGGSFIELD_SEEDANCE_2_FAST_ENDPOINT`
+- `HIGGSFIELD_SEEDANCE_2_MINI_ENDPOINT`
+- `HIGGSFIELD_KLING_3_OMNI_ENDPOINT`
+- `HIGGSFIELD_KLING_3_ENDPOINT`
+- `HIGGSFIELD_RUNWAY_GEN_4_5_ENDPOINT`
+
+Alternatively, use one text variable:
+
+```text
+HIGGSFIELD_MODEL_ENDPOINTS={"seedance_2_0_standard":"provider/model/path","kling_3_0":"provider/model/path"}
+```
+
+Do not guess model IDs. Higgsfield's modern Cloud/CLI catalog and its public key/secret REST catalog are separate surfaces and do not always expose the same models.
+
+## Optional variables
+
+- `HIGGSFIELD_API_BASE_URL`: defaults to `https://platform.higgsfield.ai`.
+- `HIGGSFIELD_ALLOW_PUBLIC=true`: removes the owner-code check. Do not enable this until user authentication, billing, and rate limits exist.
+
+Never commit real credentials and never prefix secrets with `NEXT_PUBLIC_`.
