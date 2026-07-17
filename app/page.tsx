@@ -48,7 +48,7 @@ const modes: { id: Mode; label: string; placeholder: string }[] = [
 const modelMap: Record<Mode, string[]> = {
   image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Grok Imagine Image", "FLUX 2 Pro"],
   video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Gemini Omni Flash", "Grok Imagine Video 1.5", "Kling 3.0 Pro", "Kling 3.0 Omni 4K", "Kling 3.0 Elements", "Veo 3.1", "Happy Horse 1.1"],
-  music: ["Lyria 3", "AudioFlow · ElevenLabs", "Suno · Kie", "MiniMax Music 2.5", "Score Composer · CassetteAI"],
+  music: ["Lyria 3", "AudioFlow", "Suno", "Score Composer · CassetteAI"],
   voice: ["GPT Realtime Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
 };
@@ -73,9 +73,8 @@ const getApiModelKey = (modelName: string) => {
     "Happy Horse 1.1": "happy_horse_1_1",
     "Veo 3.1": "veo_3_1",
     "Lyria 3": "lyria_3",
-    "AudioFlow · ElevenLabs": "audioflow_elevenlabs",
-    "Suno · Kie": "suno",
-    "MiniMax Music 2.5": "minimax_music_2_5",
+    "AudioFlow": "audioflow_elevenlabs",
+    "Suno": "suno",
     "Score Composer · CassetteAI": "score_composer_cassetteai",
   };
   return keys[modelName] ?? modelName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -229,7 +228,7 @@ const toolGroups = [
     label: "Music Lab",
     description: "Original songs, cinematic scores, stems, sound design and intelligent mastering.",
     accent: "violet",
-    meta: "5 connected engines",
+    meta: "4 connected engines",
   },
   {
     icon: "voice" as IconName,
@@ -294,9 +293,8 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
   ],
   music: [
     { name: "Lyria 3", maker: "GOOGLE · FAL", tag: "30 sec", art: "gold", features: ["Vocals + lyrics", "Prompt-to-music"] },
-    { name: "AudioFlow · ElevenLabs", maker: "SHAZAN · ELEVENLABS", tag: "3–600 sec", art: "world", features: ["Cinematic score", "Full-length music"] },
-    { name: "Suno · Kie", maker: "SUNO · KIE", tag: "Songs", art: "coral", features: ["Vocals", "Two variations"] },
-    { name: "MiniMax Music 2.5", maker: "MINIMAX · FAL", tag: "2.5", art: "ice", features: ["Auto lyrics", "Full songs"] },
+    { name: "AudioFlow", maker: "SHAZAN", tag: "3–600 sec", art: "world", features: ["Cinematic score", "Full-length music"] },
+    { name: "Suno", maker: "SUNO AI", tag: "Songs", art: "coral", features: ["Vocals", "Two variations"] },
     { name: "Score Composer · CassetteAI", maker: "SHAZAN · CASSETTEAI", tag: "Score", art: "portrait", features: ["Cinematic score", "30–180 sec"] },
   ],
   voice: [
@@ -357,9 +355,8 @@ const modelUniverse: { name: string; mode: Mode }[] = [
   { name: "Happy Horse 1.1", mode: "video" },
   { name: "Veo 3.1", mode: "video" },
   { name: "Lyria 3", mode: "music" },
-  { name: "AudioFlow · ElevenLabs", mode: "music" },
-  { name: "Suno · Kie", mode: "music" },
-  { name: "MiniMax Music 2.5", mode: "music" },
+  { name: "AudioFlow", mode: "music" },
+  { name: "Suno", mode: "music" },
   { name: "Score Composer · CassetteAI", mode: "music" },
   { name: "ElevenLabs", mode: "voice" },
 ];
