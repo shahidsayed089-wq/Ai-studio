@@ -1,12 +1,14 @@
-# Server-side generation token. Never use NEXT_PUBLIC_ and never commit the real value.
-KIE_API_KEY=replace-with-your-private-api-key
+# Primary server-side generation token. Never use NEXT_PUBLIC_ and never commit the real value.
+FAL_KEY=replace-with-your-private-fal-key
 
-# Protects paid generation on the public site. Enter the same code in the owner field.
-STUDIO_ACCESS_CODE=choose-a-long-private-code
+# Owner gate stays enabled until SHAZAN user accounts and credit wallets launch.
+STUDIO_ACCESS_CODE=replace-with-a-long-private-owner-code
+
+# Optional fallback for Seedance Mini and Kling Elements.
+KIE_API_KEY=replace-with-your-private-kie-key
 
 # Optional service overrides. The defaults already point at the production APIs.
 # KIE_API_BASE_URL=https://api.kie.ai
 # KIE_UPLOAD_BASE_URL=https://kieai.redpandaai.co
-
-# Keep paid generation owner-only until SHAZAN login, wallet, quotas and abuse limits exist.
-# STUDIO_ALLOW_PUBLIC=false
+# FAL_QUEUE_BASE_URL=https://queue.fal.run
+# FAL_STORAGE_BASE_URL=https://rest.fal.ai
