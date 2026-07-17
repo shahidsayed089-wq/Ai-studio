@@ -51,11 +51,11 @@ The bridge currently has verified fal.ai request mappings for:
 - Grok Imagine Video 1.5 — exact image-to-video endpoint
 - Kling 3.0 Pro and Kling 3.0 Omni 4K
 - Veo 3.1 and HappyHorse 1.1
-- Lyria 3, ElevenLabs Music, MiniMax Music 2.5 and CassetteAI Music Generator
+- Lyria 3, AudioFlow, Suno and Score Composer
 
 Kie remains an optional fallback for Seedance 2.0 Mini and Kling 3.0 Elements, and powers the separate exact Suno music route.
 
-AudioFlow and Score Composer are SHAZAN workflow names; the interface identifies their underlying ElevenLabs and CassetteAI engines. Udio is not shown as connected because an exact official fal.ai endpoint has not been verified. Unconnected voice and avatar modes show a pending message instead of pretending that a render completed.
+AudioFlow and Score Composer are SHAZAN workflow names backed by server-side provider routes. Udio is not shown as connected because an exact official fal.ai endpoint has not been verified. Unconnected voice and avatar modes show a pending message instead of pretending that a render completed.
 
 ## Public-launch safety
 
