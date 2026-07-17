@@ -16,6 +16,7 @@ The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as 
 Open **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** and add these to both Production and Preview:
 
 - `FAL_KEY`: primary private fal.ai API token.
+- `OPENAI_API_KEY`: private OpenAI token used by GPT Voice.
 - `STUDIO_ACCESS_CODE`: a long temporary owner-only generation code.
 - `KIE_API_KEY`: optional Kie fallback token for Seedance Mini and Kling Elements.
 
@@ -42,6 +43,13 @@ The external token is added only by the Worker. Public responses use SHAZAN-faci
 - `lyria_3` → `fal-ai/lyria3`
 - `audioflow_elevenlabs` → `fal-ai/elevenlabs/music`
 - `score_composer_cassetteai` → `CassetteAI/music-generator`
+- `elevenlabs_voice` → `fal-ai/elevenlabs/tts/eleven-v3`
+- `voice_forge` → `fal-ai/elevenlabs/text-to-voice/design/eleven-v3`
+- `multilingual_pro` → `fal-ai/elevenlabs/tts/multilingual-v2`
+
+OpenAI voice route:
+
+- `gpt_voice` → OpenAI `/v1/audio/speech` with `gpt-4o-mini-tts`; the MP3 is copied to private fal storage for preview.
 
 Kie fallbacks:
 
@@ -57,5 +65,6 @@ No per-model endpoint environment variables are required.
 - `KIE_UPLOAD_BASE_URL`: defaults to `https://kieai.redpandaai.co`.
 - `FAL_QUEUE_BASE_URL`: defaults to `https://queue.fal.run`.
 - `FAL_STORAGE_BASE_URL`: defaults to `https://rest.fal.ai`.
+- `OPENAI_API_BASE_URL`: defaults to `https://api.openai.com`.
 
 Generation is owner-only by default and spends from the configured provider balance. Keep that gate enabled until a credit wallet, quotas, rate limits and abuse controls are in production. Generated media is temporary upstream; copy completed customer assets to durable SHAZAN storage.
