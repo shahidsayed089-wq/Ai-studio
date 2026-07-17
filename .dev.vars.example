@@ -1,6 +1,9 @@
 # Primary server-side generation token. Never use NEXT_PUBLIC_ and never commit the real value.
 FAL_KEY=replace-with-your-private-fal-key
 
+# OpenAI Speech API for the GPT Voice generator.
+OPENAI_API_KEY=replace-with-your-private-openai-key
+
 # Owner gate stays enabled until SHAZAN user accounts and credit wallets launch.
 STUDIO_ACCESS_CODE=replace-with-a-long-private-owner-code
 
