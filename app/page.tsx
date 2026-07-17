@@ -18,6 +18,7 @@ type VideoInputProfile = {
   totalLimit: number;
   slots: VideoInputSlot[];
 };
+type GeneratorStatus = "ready" | "api-required";
 type IconName =
   | Mode
   | "sparkle"
@@ -328,6 +329,8 @@ export default function Home() {
   const [creditVideoInput, setCreditVideoInput] = useState(false);
   const [creditNativeAudio, setCreditNativeAudio] = useState(true);
   const [references, setReferences] = useState<ReferenceFiles>(emptyReferences);
+  const [videoGeneratorOpen, setVideoGeneratorOpen] = useState(false);
+  const [generatorStatus, setGeneratorStatus] = useState<GeneratorStatus>("ready");
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const currentMode = useMemo(
@@ -338,6 +341,15 @@ export default function Home() {
   const currentCreditCapability = creditCapabilities[creditModel];
   const referenceTotal = references.images.length + references.videos.length + references.audio.length;
   const videoInputProfile = getVideoInputProfile(model);
+  const providerUrl = model.startsWith("Seedance 2.0")
+    ? "https://higgsfield.ai/seedance/2.0"
+    : model.startsWith("Kling 3.0")
+      ? "https://higgsfield.ai/kling-3.0"
+      : model === "Sora 2"
+        ? "https://higgsfield.ai/sora-2"
+        : model === "Runway Gen-4.5"
+          ? "https://app.runwayml.com/"
+          : "https://higgsfield.ai/ai-video";
   const klingResolution = creditResolution === "1080p" ? "1080p" : "720p";
   const klingRate = creditVideoInput
     ? (klingResolution === "1080p" ? 16 : 12)
@@ -392,12 +404,15 @@ export default function Home() {
   const changeModel = (value: string) => {
     setModel(value);
     clearReferences();
+    setGeneratorStatus("ready");
   };
 
   const switchMode = (mode: Mode) => {
     setActiveMode(mode);
     setModel(modelMap[mode][0]);
     clearReferences();
+    setVideoGeneratorOpen(false);
+    setGeneratorStatus("ready");
     setCreationReady(false);
   };
 
@@ -415,7 +430,16 @@ export default function Home() {
   };
 
   const generate = () => {
-    if (!prompt.trim()) setPrompt(promptIdeas[activeMode]);
+    const nextPrompt = prompt.trim() || promptIdeas[activeMode];
+    if (!prompt.trim()) setPrompt(nextPrompt);
+
+    if (activeMode === "video") {
+      setGeneratorStatus("ready");
+      setCreationReady(false);
+      setVideoGeneratorOpen(true);
+      return;
+    }
+
     setGenerating(true);
     setCreationReady(false);
     window.setTimeout(() => {
@@ -423,6 +447,8 @@ export default function Home() {
       setCreationReady(true);
     }, 1800);
   };
+
+  const requestVideoRender = () => setGeneratorStatus("api-required");
 
   return (
     <main>
@@ -574,7 +600,7 @@ export default function Home() {
               <button
                 className="model-card"
                 key={card.name}
-                onClick={() => setModel(card.name)}
+                onClick={() => changeModel(card.name)}
               >
                 <span className={`model-art ${card.art}`} />
                 <span className="model-info"><small>{card.maker}</small><b>{card.name}</b><em>{card.tag}</em></span>
@@ -592,6 +618,64 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {videoGeneratorOpen && (
+        <div className="video-generator-overlay" role="presentation">
+          <section className="video-generator-modal" role="dialog" aria-modal="true" aria-labelledby="video-generator-title">
+            <header className="video-generator-header">
+              <span className="generator-brand"><Icon name="video" size={20} /></span>
+              <span><small>SHAZAN VIDEO GENERATOR</small><b id="video-generator-title">{model}</b></span>
+              <button onClick={() => setVideoGeneratorOpen(false)} aria-label="Close video generator"><Icon name="close" size={21} /></button>
+            </header>
+
+            <div className="video-generator-body">
+              <div className="generator-preview">
+                <span className="generator-preview-badge"><Icon name="sparkle" size={14} /> {videoInputProfile.title}</span>
+                <span className="generator-play"><Icon name="play" size={32} /></span>
+                <span className="generator-preview-copy"><small>PREVIEW CANVAS</small><b>Your generated shot will appear here</b></span>
+              </div>
+
+              <div className="generator-settings">
+                <div className="generator-model-row">
+                  <span><small>SELECTED MODEL</small><b>{model}</b></span>
+                  <em>{model.startsWith("Seedance 2.0") ? "Multimodal" : videoInputProfile.title}</em>
+                </div>
+
+                <label className="generator-prompt">
+                  <span>Prompt</span>
+                  <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} />
+                </label>
+
+                <div className="generator-input-summary">
+                  <span><Icon name="layers" size={17} /><b>{videoInputProfile.title}</b></span>
+                  <small>{videoInputProfile.summary}</small>
+                  <div>
+                    {videoInputProfile.slots.map((slot) => (
+                      <i key={slot.kind}>{references[slot.kind].length}/{slot.limit} {slot.kind}</i>
+                    ))}
+                  </div>
+                </div>
+
+                {generatorStatus === "api-required" && (
+                  <div className="generator-api-notice" role="status">
+                    <Icon name="sliders" size={19} />
+                    <span><b>Secure Higgsfield bridge required</b><small>The generator is open correctly. Final rendering needs a Cloudflare server endpoint so your secret key never reaches the public browser.</small></span>
+                  </div>
+                )}
+
+                <div className="generator-actions">
+                  <button className="generator-back" onClick={() => setVideoGeneratorOpen(false)}>Back to inputs</button>
+                  {generatorStatus === "ready" ? (
+                    <button className="generator-render" onClick={requestVideoRender}><Icon name="sparkle" size={18} /> Generate video</button>
+                  ) : (
+                    <a className="generator-provider" href={providerUrl} target="_blank" rel="noreferrer">Open provider now <Icon name="arrow" size={17} /></a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="latest-models-section" aria-labelledby="latest-models-title">
         <div className="latest-models-heading">
