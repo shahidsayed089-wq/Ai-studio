@@ -54,10 +54,13 @@ The bridge currently has verified fal.ai request mappings for:
 - Veo 3.1 and HappyHorse 1.1
 - Lyria 3, AudioFlow, Suno and Score Composer
 - GPT Voice, ElevenLabs, Voice Forge and Multilingual Pro
+- HeyGen Avatar IV, Avatar One, Digital Twin and Performance Capture
 
 Kie remains an optional fallback for Seedance 2.0 Mini and Kling 3.0 Elements, and powers the separate exact Suno music route.
 
-AudioFlow and Score Composer are SHAZAN workflow names backed by server-side provider routes. Udio is not shown as connected because an exact official fal.ai endpoint has not been verified. Unconnected avatar modes show a pending message instead of pretending that a render completed.
+AudioFlow, Avatar One, Digital Twin, Performance Capture and Score Composer are SHAZAN workflow names backed by capability-matched server-side provider routes. Udio is not shown as connected because an exact official fal.ai endpoint has not been verified.
+
+Avatar inputs stay model-specific: HeyGen Avatar IV accepts a clear-face photo plus script or optional audio; Avatar One and Digital Twin require an image plus voice audio; Performance Capture requires a character image plus a driving-performance video.
 
 GPT Voice uses OpenAI's request-based Speech API because the current UI generates a bounded MP3, not a two-way realtime conversation. The interface discloses that voice output is AI-generated. Voice Forge is a SHAZAN voice-design workflow; ElevenLabs and Multilingual Pro use verified fal.ai TTS routes.
 
