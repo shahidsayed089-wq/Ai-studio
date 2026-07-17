@@ -49,7 +49,7 @@ const modelMap: Record<Mode, string[]> = {
   image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Grok Imagine Image", "FLUX 2 Pro"],
   video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Gemini Omni Flash", "Grok Imagine Video 1.5", "Kling 3.0 Pro", "Kling 3.0 Omni 4K", "Kling 3.0 Elements", "Veo 3.1", "Happy Horse 1.1"],
   music: ["Lyria 3", "AudioFlow", "Suno", "Score Composer · CassetteAI"],
-  voice: ["GPT Realtime Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
+  voice: ["GPT Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
 };
 
@@ -76,6 +76,10 @@ const getApiModelKey = (modelName: string) => {
     "AudioFlow": "audioflow_elevenlabs",
     "Suno": "suno",
     "Score Composer · CassetteAI": "score_composer_cassetteai",
+    "GPT Voice": "gpt_voice",
+    "ElevenLabs": "elevenlabs_voice",
+    "Voice Forge": "voice_forge",
+    "Multilingual Pro": "multilingual_pro",
   };
   return keys[modelName] ?? modelName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 };
@@ -298,9 +302,10 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
     { name: "Score Composer · CassetteAI", maker: "SHAZAN · CASSETTEAI", tag: "Score", art: "portrait", features: ["Cinematic score", "30–180 sec"] },
   ],
   voice: [
-    { name: "GPT Realtime Voice", maker: "OPENAI", tag: "Live", art: "gold", features: ["Realtime", "Multilingual"] },
-    { name: "ElevenLabs", maker: "ELEVENLABS", tag: "Voice", art: "portrait", features: ["Voice design", "Dubbing"] },
-    { name: "Voice Forge", maker: "SHAZAN", tag: "Character", art: "sculpture", features: ["Emotional direction", "Voice library"] },
+    { name: "GPT Voice", maker: "OPENAI", tag: "Natural", art: "gold", features: ["Prompt-directed speech", "Multilingual"] },
+    { name: "ElevenLabs", maker: "ELEVENLABS", tag: "Expressive", art: "portrait", features: ["Eleven v3", "Emotional delivery"] },
+    { name: "Voice Forge", maker: "SHAZAN", tag: "Design", art: "sculpture", features: ["Describe a new voice", "Generated preview"] },
+    { name: "Multilingual Pro", maker: "SHAZAN", tag: "Global", art: "ice", features: ["Multilingual speech", "Natural delivery"] },
   ],
   avatar: [
     { name: "HeyGen Avatar IV", maker: "HEYGEN", tag: "Avatar", art: "portrait", features: ["Talking avatar", "Lip-sync"] },
@@ -358,7 +363,10 @@ const modelUniverse: { name: string; mode: Mode }[] = [
   { name: "AudioFlow", mode: "music" },
   { name: "Suno", mode: "music" },
   { name: "Score Composer · CassetteAI", mode: "music" },
+  { name: "GPT Voice", mode: "voice" },
   { name: "ElevenLabs", mode: "voice" },
+  { name: "Voice Forge", mode: "voice" },
+  { name: "Multilingual Pro", mode: "voice" },
 ];
 
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
@@ -424,6 +432,7 @@ export default function Home() {
   const [videoResolution, setVideoResolution] = useState("720p");
   const [videoDuration, setVideoDuration] = useState(5);
   const [musicDuration, setMusicDuration] = useState(30);
+  const [voicePreset, setVoicePreset] = useState("marin");
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const generatorRunRef = useRef(0);
 
@@ -448,7 +457,14 @@ export default function Home() {
           totalLimit: 0,
           slots: [] as VideoInputSlot[],
         }
-      : getVideoInputProfile(model);
+      : activeMode === "voice"
+        ? {
+            title: model === "Voice Forge" ? "Voice design" : "Text to speech",
+            summary: model === "Voice Forge" ? "Describe age, accent, texture and emotion for a generated voice preview" : `${model} · secure prompt-to-audio generation`,
+            totalLimit: 0,
+            slots: [] as VideoInputSlot[],
+          }
+        : getVideoInputProfile(model);
   const baseApiRate = creditModel === "kling" ? 0.07 : 0.057;
   const creditTotal = `$${(baseApiRate * creditDuration).toFixed(2)}+`;
   const creditMath = `$${baseApiRate.toFixed(3)}/sec base rate × ${creditDuration} sec`;
@@ -479,6 +495,9 @@ export default function Home() {
         ? [6, 8, 10, 15]
         : [5, 8, 10, 15];
   const musicDurationOptions = model === "Lyria 3" ? [30] : [30, 60, 120, 180];
+  const voiceOptions = model === "GPT Voice"
+    ? ["marin", "cedar", "coral", "alloy", "nova", "onyx"]
+    : ["Rachel", "Aria", "Brian", "Roger"];
 
   const selectCreditModel = (nextModel: CreditModel) => {
     setCreditModel(nextModel);
@@ -511,13 +530,15 @@ export default function Home() {
     setGeneratorStatus("ready");
     setGeneratorMessage("Ready for a secure SHAZAN render.");
     setGeneratorVideoUrl("");
-    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" ? "audio" : "video");
+    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" || activeMode === "voice" ? "audio" : "video");
     setGeneratorRequestId("");
   };
 
   const changeModel = (value: string) => {
     setModel(value);
-    if (value === "Lyria 3") setMusicDuration(30);
+    if (value === "GPT Voice") setVoicePreset("marin");
+    else if (["ElevenLabs", "Multilingual Pro"].includes(value)) setVoicePreset("Rachel");
+    else if (value === "Lyria 3") setMusicDuration(30);
     else if (value === "Gemini Omni Flash" || value === "Veo 3.1") setVideoDuration(8);
     else if (value === "Grok Imagine Video 1.5") setVideoDuration(6);
     else setVideoDuration(5);
@@ -528,6 +549,7 @@ export default function Home() {
   const switchMode = (mode: Mode) => {
     setActiveMode(mode);
     setModel(modelMap[mode][0]);
+    if (mode === "voice") setVoicePreset("marin");
     clearReferences();
     setVideoGeneratorOpen(false);
     resetGenerator();
@@ -548,12 +570,14 @@ export default function Home() {
   };
 
   const generate = () => {
-    const nextPrompt = prompt.trim() || promptIdeas[activeMode];
+    const nextPrompt = prompt.trim() || (activeMode === "voice" && model === "Voice Forge"
+      ? "Warm cinematic Indian narrator, deep resonant tone, precise Hindi and English pronunciation, calm authority"
+      : promptIdeas[activeMode]);
     if (!prompt.trim()) setPrompt(nextPrompt);
 
-    if (activeMode === "video" || activeMode === "image" || activeMode === "music") {
+    if (activeMode === "video" || activeMode === "image" || activeMode === "music" || activeMode === "voice") {
       if (generatorStatus === "failed") resetGenerator();
-      setGeneratorOutputType(activeMode === "music" ? "audio" : activeMode);
+      setGeneratorOutputType(activeMode === "music" || activeMode === "voice" ? "audio" : activeMode);
       setCreationReady(false);
       setVideoGeneratorOpen(true);
       return;
@@ -584,7 +608,7 @@ export default function Home() {
     const runId = generatorRunRef.current + 1;
     generatorRunRef.current = runId;
     setGeneratorVideoUrl("");
-    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" ? "audio" : "video");
+    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" || activeMode === "voice" ? "audio" : "video");
     setGeneratorRequestId("");
 
     try {
@@ -627,6 +651,8 @@ export default function Home() {
         duration: activeMode === "music" ? musicDuration : videoDuration,
         resolution: normalizedResolution,
       };
+
+      if (activeMode === "voice") argumentsPayload.voice = voicePreset;
 
       if (activeMode === "image") {
         if (imageReferences.length) argumentsPayload.image_references = imageReferences;
@@ -823,11 +849,13 @@ export default function Home() {
                 </select>
               </label>
               <label className="select-control">
-                <span><Icon name={activeMode === "music" ? "music" : "expand"} size={17} /> {activeMode === "music" ? "Track length" : "Aspect ratio"}</span>
+                <span><Icon name={activeMode === "music" ? "music" : activeMode === "voice" ? "voice" : "expand"} size={17} /> {activeMode === "music" ? "Track length" : activeMode === "voice" ? (model === "Voice Forge" ? "Mode" : "Voice") : "Aspect ratio"}</span>
                 {activeMode === "music" ? (
                   <select value={musicDurationOptions.includes(musicDuration) ? musicDuration : musicDurationOptions[0]} onChange={(event) => setMusicDuration(Number(event.target.value))}>
                     {musicDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}
                   </select>
+                ) : activeMode === "voice" ? (
+                  model === "Voice Forge" ? <select defaultValue="Design preview"><option>Design preview</option></select> : <select value={voiceOptions.includes(voicePreset) ? voicePreset : voiceOptions[0]} onChange={(event) => setVoicePreset(event.target.value)}>{voiceOptions.map((option) => <option key={option}>{option}</option>)}</select>
                 ) : (
                   <select value={videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}>
                     <option value="16:9">16:9 Widescreen</option><option value="9:16">9:16 Vertical</option><option value="1:1">1:1 Square</option><option value="4:3">4:3 Landscape</option>
@@ -835,14 +863,14 @@ export default function Home() {
                 )}
               </label>
               <label className="select-control">
-                <span><Icon name="cube" size={17} /> {activeMode === "music" ? "Format" : "Quality"}</span>
-                {activeMode === "music" ? <select value="MP3" aria-readonly="true"><option>MP3</option></select> : (
+                <span><Icon name="cube" size={17} /> {activeMode === "music" || activeMode === "voice" ? "Format" : "Quality"}</span>
+                {activeMode === "music" || activeMode === "voice" ? <select defaultValue="MP3"><option>MP3</option></select> : (
                   <select value={activeMode === "video" ? (generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p") : "2k"} onChange={(event) => { if (activeMode === "video") setVideoResolution(event.target.value); }}>
                     {(activeMode === "video" ? generatorResolutionOptions : ["1k", "2k", "4k"]).map((option) => <option key={option}>{option}</option>)}
                   </select>
                 )}
               </label>
-              {activeMode !== "music" && <label className="select-control hide-small">
+              {activeMode !== "music" && activeMode !== "voice" && <label className="select-control hide-small">
                 <span><Icon name="layers" size={17} /> Style</span>
                 <select defaultValue="Cinematic">
                   <option>Cinematic</option><option>Photoreal</option><option>Editorial</option><option>Anime</option>
@@ -914,7 +942,7 @@ export default function Home() {
                 </div>
 
                 <label className="generator-prompt">
-                  <span>Prompt</span>
+                  <span>{activeMode === "voice" ? (model === "Voice Forge" ? "Voice description" : "Script") : "Prompt"}</span>
                   <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} />
                 </label>
 
@@ -923,6 +951,11 @@ export default function Home() {
                     <>
                       <label><span>Track length</span><select value={musicDurationOptions.includes(musicDuration) ? musicDuration : musicDurationOptions[0]} onChange={(event) => setMusicDuration(Number(event.target.value))}>{musicDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}</select></label>
                       <label><span>Output</span><select value="MP3" aria-readonly="true"><option>MP3 audio</option></select></label>
+                    </>
+                  ) : activeMode === "voice" ? (
+                    <>
+                      {model === "Voice Forge" ? <label><span>Mode</span><select defaultValue="Design preview"><option>Design preview</option></select></label> : <label><span>Voice</span><select value={voiceOptions.includes(voicePreset) ? voicePreset : voiceOptions[0]} onChange={(event) => setVoicePreset(event.target.value)}>{voiceOptions.map((option) => <option key={option}>{option}</option>)}</select></label>}
+                      <label><span>Output</span><select defaultValue="MP3"><option>MP3 audio</option></select></label>
                     </>
                   ) : (
                     <>
@@ -936,6 +969,7 @@ export default function Home() {
                 <div className="generator-input-summary">
                   <span><Icon name="layers" size={17} /><b>{videoInputProfile.title}</b></span>
                   <small>{videoInputProfile.summary}</small>
+                  {activeMode === "voice" && <small>This output is AI-generated speech, not a human recording.</small>}
                   <div>
                     {videoInputProfile.slots.length === 0 && <i>Prompt only</i>}
                     {videoInputProfile.slots.map((slot) => (
