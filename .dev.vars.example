@@ -1,20 +1,12 @@
-# Higgsfield official REST credentials (KEY_ID + KEY_SECRET)
-# These names also work: HF_API_KEY + HF_API_SECRET
-HIGGSFIELD_API_ID=replace-with-key-id
-HIGGSFIELD_API_KEY=replace-with-key-secret
-HIGGSFIELD_API_BASE_URL=https://platform.higgsfield.ai
+# Server-side generation token. Never use NEXT_PUBLIC_ and never commit the real value.
+KIE_API_KEY=replace-with-your-private-api-key
 
-# Protects your paid credits on the public site. Enter the same code in the generator.
+# Protects paid generation on the public site. Enter the same code in the owner field.
 STUDIO_ACCESS_CODE=choose-a-long-private-code
 
-# Copy the exact REST model_id values enabled for your Higgsfield API account.
-# Modern Cloud-only models may not be present on the public key/secret REST surface.
-HIGGSFIELD_SEEDANCE_2_STANDARD_ENDPOINT=
-HIGGSFIELD_SEEDANCE_2_FAST_ENDPOINT=
-HIGGSFIELD_SEEDANCE_2_MINI_ENDPOINT=
-HIGGSFIELD_KLING_3_OMNI_ENDPOINT=
-HIGGSFIELD_KLING_3_ENDPOINT=
-HIGGSFIELD_RUNWAY_GEN_4_5_ENDPOINT=
+# Optional service overrides. The defaults already point at the production APIs.
+# KIE_API_BASE_URL=https://api.kie.ai
+# KIE_UPLOAD_BASE_URL=https://kieai.redpandaai.co
 
-# Alternative: configure several model IDs as one JSON text variable.
-# HIGGSFIELD_MODEL_ENDPOINTS={"seedance_2_0_standard":"provider/model/path"}
+# Keep paid generation owner-only until SHAZAN login, wallet, quotas and abuse limits exist.
+# STUDIO_ALLOW_PUBLIC=false
