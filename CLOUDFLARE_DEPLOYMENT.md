@@ -1,6 +1,6 @@
 # Cloudflare deployment
 
-The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as a Next.js static export with a Pages Function for the secure Higgsfield bridge.
+The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as a Next.js static export with a secure Higgsfield bridge.
 
 ## Build settings
 
@@ -9,7 +9,7 @@ The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as 
 3. Build output directory: `out`
 4. Node.js: 22
 
-The server function is located at `functions/api/higgsfield/[[path]].js`. Cloudflare deploys it alongside the static `out` directory.
+The server bridge is located at `public/_worker.js`. Next copies it to `out/_worker.js`, which Cloudflare Pages deploys in Advanced Mode. The Worker handles only `/api/higgsfield/*`; every other request is forwarded to the static site through `env.ASSETS`.
 
 ## Required encrypted secrets
 
