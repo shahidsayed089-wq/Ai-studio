@@ -46,8 +46,8 @@ const modes: { id: Mode; label: string; placeholder: string }[] = [
 ];
 
 const modelMap: Record<Mode, string[]> = {
-  image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Nano Banana 2 Lite", "Luma UNI-1.1", "FLUX Pro"],
-  video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Kling 3.0 Elements", "Kling 3.0", "Happy Horse 1.1", "Sora 2", "Veo 3.1", "Runway Gen-4.5", "Luma Ray3.2", "Luma Ray3.14"],
+  image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Grok Imagine Image", "FLUX 2 Pro"],
+  video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Gemini Omni Flash", "Grok Imagine Video 1.5", "Kling 3.0 Pro", "Kling 3.0 Omni 4K", "Kling 3.0 Elements", "Veo 3.1", "Happy Horse 1.1"],
   music: ["Lyria 3", "AudioFlow", "Suno", "Udio", "Score Composer"],
   voice: ["GPT Realtime Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
@@ -57,17 +57,21 @@ const emptyReferences = (): ReferenceFiles => ({ images: [], videos: [], audio: 
 
 const getApiModelKey = (modelName: string) => {
   const keys: Record<string, string> = {
+    "GPT Image 2": "gpt_image_2",
+    "Nano Banana 2": "nano_banana_2",
+    "Nano Banana Pro": "nano_banana_pro",
+    "Grok Imagine Image": "grok_imagine_image",
+    "FLUX 2 Pro": "flux_2_pro",
     "Seedance 2.0 Standard": "seedance_2_0_standard",
     "Seedance 2.0 Fast": "seedance_2_0_fast",
     "Seedance 2.0 Mini": "seedance_2_0_mini",
     "Kling 3.0 Elements": "kling_3_0_elements",
-    "Kling 3.0": "kling_3_0",
+    "Kling 3.0 Pro": "kling_3_0",
+    "Kling 3.0 Omni 4K": "kling_3_0_omni",
+    "Gemini Omni Flash": "gemini_omni_flash",
+    "Grok Imagine Video 1.5": "grok_imagine_video_1_5",
     "Happy Horse 1.1": "happy_horse_1_1",
-    "Sora 2": "sora_2",
     "Veo 3.1": "veo_3_1",
-    "Runway Gen-4.5": "runway_gen_4_5",
-    "Luma Ray3.2": "luma_ray_3_2",
-    "Luma Ray3.14": "luma_ray_3_14",
   };
   return keys[modelName] ?? modelName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 };
@@ -86,16 +90,28 @@ const extractApiMessage = (value: unknown, fallback: string) => {
   return fallback;
 };
 
-const extractVideoUrl = (value: unknown): string | null => {
+const extractMedia = (value: unknown): { url: string; type: "image" | "video" | "audio" } | null => {
+  if (value && typeof value === "object") {
+    const output = (value as Record<string, unknown>).output;
+    if (output && typeof output === "object") {
+      const record = output as Record<string, unknown>;
+      if (typeof record.url === "string" && /^https:\/\//i.test(record.url)) {
+        const type = record.type === "video" || record.type === "audio" ? record.type : "image";
+        return { url: record.url, type };
+      }
+    }
+  }
   const seen = new Set<unknown>();
-  const candidates: { url: string; score: number }[] = [];
+  const candidates: { url: string; score: number; type: "image" | "video" | "audio" }[] = [];
 
   const visit = (item: unknown, path: string) => {
     if (typeof item === "string" && /^https:\/\//i.test(item)) {
       if (/status|cancel|webhook/i.test(path)) return;
       const isVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(item);
+      const isAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(item);
       const videoPath = /video|result|output|raw/i.test(path);
-      candidates.push({ url: item, score: (isVideo ? 5 : 0) + (videoPath ? 2 : 0) });
+      const imagePath = /image|images/i.test(path);
+      candidates.push({ url: item, score: (isVideo || isAudio ? 5 : 2) + (videoPath || imagePath ? 2 : 0), type: isVideo ? "video" : isAudio ? "audio" : "image" });
       return;
     }
     if (!item || typeof item !== "object" || seen.has(item)) return;
@@ -109,7 +125,7 @@ const extractVideoUrl = (value: unknown): string | null => {
 
   visit(value, "response");
   candidates.sort((a, b) => b.score - a.score);
-  return candidates[0]?.score ? candidates[0].url : null;
+  return candidates[0]?.score ? { url: candidates[0].url, type: candidates[0].type } : null;
 };
 
 const seedanceInputProfile: VideoInputProfile = {
@@ -134,12 +150,33 @@ const getVideoInputProfile = (modelName: string): VideoInputProfile => {
         totalLimit: 1,
         slots: [{ kind: "videos", label: "Add video element", note: "One 3–8s source clip", accept: "video/*", limit: 1 }],
       };
-    case "Kling 3.0":
+    case "Kling 3.0 Pro":
       return {
         title: "Frame controls",
-        summary: "Kling 3.0 · start and end frames",
+        summary: "Kling 3.0 Pro · optional start and end frames",
         totalLimit: 2,
         slots: [{ kind: "images", label: "Add start / end frames", note: "Up to 2 images", accept: "image/*", limit: 2 }],
+      };
+    case "Kling 3.0 Omni 4K":
+      return {
+        title: "4K frame controls",
+        summary: "Kling Omni 4K · first frame required, end frame optional",
+        totalLimit: 2,
+        slots: [{ kind: "images", label: "Add first / end frames", note: "First image required", accept: "image/*", limit: 2 }],
+      };
+    case "Gemini Omni Flash":
+      return {
+        title: "Image references",
+        summary: "Gemini Omni Flash · text or reference images via fal.ai",
+        totalLimit: 7,
+        slots: [{ kind: "images", label: "Add reference images", note: "Up to 7 images", accept: "image/*", limit: 7 }],
+      };
+    case "Grok Imagine Video 1.5":
+      return {
+        title: "First frame",
+        summary: "Grok Imagine 1.5 · exact image-to-video endpoint",
+        totalLimit: 1,
+        slots: [{ kind: "images", label: "Add first frame", note: "One image required", accept: "image/*", limit: 1 }],
       };
     case "Veo 3.1":
       return {
@@ -148,17 +185,7 @@ const getVideoInputProfile = (modelName: string): VideoInputProfile => {
         totalLimit: 2,
         slots: [{ kind: "images", label: "Add first / last frames", note: "Up to 2 images", accept: "image/*", limit: 2 }],
       };
-    case "Luma Ray3.14":
-      return {
-        title: "Source video",
-        summary: "Ray3.14 · video modify workflow",
-        totalLimit: 1,
-        slots: [{ kind: "videos", label: "Add source video", note: "One video input", accept: "video/*", limit: 1 }],
-      };
-    case "Runway Gen-4.5":
-    case "Sora 2":
     case "Happy Horse 1.1":
-    case "Luma Ray3.2":
     default:
       return {
         title: "First frame",
@@ -183,14 +210,14 @@ const toolGroups = [
     label: "Image Studio",
     description: "GPT Image, Nano Banana and frontier image engines for generation, editing and consistent visual worlds.",
     accent: "gold",
-    meta: "6 frontier models",
+    meta: "5 connected models",
   },
   {
     icon: "video" as IconName,
     label: "Video Studio",
     description: "Model-specific video workflows: Seedance multimodal, Kling video and frame control, plus first-frame generation.",
     accent: "coral",
-    meta: "11 video engines",
+    meta: "10 verified engines",
   },
   {
     icon: "music" as IconName,
@@ -245,22 +272,20 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
     { name: "GPT Image 2", maker: "OPENAI", tag: "Latest", art: "sculpture", features: ["Generate + edit", "High fidelity"] },
     { name: "Nano Banana 2", maker: "GOOGLE", tag: "4K", art: "gold", features: ["Multi-reference", "Video to image"] },
     { name: "Nano Banana Pro", maker: "GOOGLE", tag: "Pro", art: "portrait", features: ["Precision control", "Brand consistency"] },
-    { name: "Nano Banana 2 Lite", maker: "GOOGLE", tag: "Fast", art: "ice", features: ["Low latency", "High volume"] },
-    { name: "Luma UNI-1.1", maker: "LUMA", tag: "Brand", art: "coral", features: ["Style memory", "Creative direction"] },
-    { name: "FLUX Pro", maker: "BLACK FOREST", tag: "Photo", art: "world", features: ["Photoreal", "Typography"] },
+    { name: "Grok Imagine Image", maker: "XAI", tag: "Aesthetic", art: "ice", features: ["Text to image", "Quality edit"] },
+    { name: "FLUX 2 Pro", maker: "BLACK FOREST", tag: "Photo", art: "world", features: ["Photoreal", "Typography"] },
   ],
   video: [
     { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "base API rate · from $0.057/sec" },
     { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["Unified multimodal inputs", "480p / 720p high volume"], credits: "live rate checked before launch" },
-    { name: "Seedance 2.0 Mini", maker: "BYTEDANCE", tag: "Mini", art: "ice", features: ["Unified multimodal inputs", "Fast drafts + iteration"], credits: "live rate checked before launch" },
+    { name: "Seedance 2.0 Mini", maker: "BYTEDANCE · KIE", tag: "Fallback", art: "ice", features: ["Kie API route", "Fast drafts + iteration"], credits: "live rate checked before launch" },
+    { name: "Gemini Omni Flash", maker: "GOOGLE", tag: "New", art: "world", features: ["Text or image references", "Synchronized audio · 3–10s"] },
+    { name: "Grok Imagine Video 1.5", maker: "XAI", tag: "1.5", art: "coral", features: ["First-frame image required", "Audio · up to 1080p"] },
+    { name: "Kling 3.0 Pro", maker: "KLING", tag: "Pro", art: "portrait", features: ["Text or start/end frames", "Native audio · 15s"], credits: "live rate checked before launch" },
+    { name: "Kling 3.0 Omni 4K", maker: "KLING", tag: "4K", art: "gold", features: ["First frame required", "Optional end frame"] },
     { name: "Kling 3.0 Elements", maker: "KLING", tag: "Elements", art: "sculpture", features: ["Video element reference", "Native sound · 15s"], credits: "base API rate · from $0.07/sec" },
-    { name: "Kling 3.0", maker: "KLING", tag: "Director", art: "portrait", features: ["Start + end frames", "Single-shot · 15s"], credits: "base API rate · from $0.07/sec" },
-    { name: "Happy Horse 1.1", maker: "ALIBABA", tag: "1080p", art: "coral", features: ["Text or first frame", "Audio + lip-sync"] },
-    { name: "Sora 2", maker: "OPENAI", tag: "Audio", art: "world", features: ["First-frame image", "Synced sound"] },
     { name: "Veo 3.1", maker: "GOOGLE", tag: "Native A/V", art: "ice", features: ["First + last frame", "Native A/V"] },
-    { name: "Runway Gen-4.5", maker: "RUNWAY", tag: "Cinema", art: "gold", features: ["First-frame image", "No native audio"] },
-    { name: "Luma Ray3.2", maker: "LUMA", tag: "Pro", art: "portrait", features: ["First-frame image", "Cut continuity"] },
-    { name: "Luma Ray3.14", maker: "LUMA", tag: "Fast", art: "sculpture", features: ["Source-video input", "Video modify"] },
+    { name: "Happy Horse 1.1", maker: "ALIBABA", tag: "1080p", art: "coral", features: ["Text or first frame", "Image-to-video"] },
   ],
   music: [
     { name: "Lyria 3", maker: "GOOGLE", tag: "Music", art: "gold", features: ["Text to music", "Instrumental control"] },
@@ -314,15 +339,17 @@ const modelUniverse: { name: string; mode: Mode }[] = [
   { name: "GPT Image 2", mode: "image" },
   { name: "Nano Banana 2", mode: "image" },
   { name: "Nano Banana Pro", mode: "image" },
+  { name: "Grok Imagine Image", mode: "image" },
   { name: "Seedance 2.0 Standard", mode: "video" },
   { name: "Seedance 2.0 Fast", mode: "video" },
   { name: "Seedance 2.0 Mini", mode: "video" },
   { name: "Kling 3.0 Elements", mode: "video" },
+  { name: "Kling 3.0 Pro", mode: "video" },
+  { name: "Kling 3.0 Omni 4K", mode: "video" },
+  { name: "Gemini Omni Flash", mode: "video" },
+  { name: "Grok Imagine Video 1.5", mode: "video" },
   { name: "Happy Horse 1.1", mode: "video" },
-  { name: "Sora 2", mode: "video" },
   { name: "Veo 3.1", mode: "video" },
-  { name: "Runway Gen-4.5", mode: "video" },
-  { name: "Luma Ray3.2", mode: "video" },
   { name: "Lyria 3", mode: "music" },
   { name: "ElevenLabs", mode: "voice" },
 ];
@@ -380,11 +407,12 @@ export default function Home() {
   const [creditNativeAudio, setCreditNativeAudio] = useState(true);
   const [references, setReferences] = useState<ReferenceFiles>(emptyReferences);
   const [videoGeneratorOpen, setVideoGeneratorOpen] = useState(false);
+  const [studioAccessCode, setStudioAccessCode] = useState("");
   const [generatorStatus, setGeneratorStatus] = useState<GeneratorStatus>("ready");
   const [generatorMessage, setGeneratorMessage] = useState("Ready for a secure SHAZAN render.");
   const [generatorVideoUrl, setGeneratorVideoUrl] = useState("");
+  const [generatorOutputType, setGeneratorOutputType] = useState<"image" | "video" | "audio">("video");
   const [generatorRequestId, setGeneratorRequestId] = useState("");
-  const [studioAccessCode, setStudioAccessCode] = useState("");
   const [videoAspectRatio, setVideoAspectRatio] = useState("16:9");
   const [videoResolution, setVideoResolution] = useState("720p");
   const [videoDuration, setVideoDuration] = useState(5);
@@ -398,21 +426,43 @@ export default function Home() {
 
   const currentCreditCapability = creditCapabilities[creditModel];
   const referenceTotal = references.images.length + references.videos.length + references.audio.length;
-  const videoInputProfile = getVideoInputProfile(model);
+  const videoInputProfile = activeMode === "image"
+    ? {
+        title: "Image references",
+        summary: `${model} · optional generation or edit references`,
+        totalLimit: 9,
+        slots: [{ kind: "images" as ReferenceKind, label: "Add images", note: "Up to 9 workspace slots", accept: "image/*", limit: 9 }],
+      }
+    : getVideoInputProfile(model);
   const baseApiRate = creditModel === "kling" ? 0.07 : 0.057;
   const creditTotal = `$${(baseApiRate * creditDuration).toFixed(2)}+`;
   const creditMath = `$${baseApiRate.toFixed(3)}/sec base rate × ${creditDuration} sec`;
   const generatorBusy = generatorStatus === "uploading" || generatorStatus === "queued" || generatorStatus === "processing";
-  const generatorResolutionOptions = model.startsWith("Kling 3.0")
-    ? ["720p", "1080p", "4K"]
+  const generatorResolutionOptions = model === "Kling 3.0 Omni 4K"
+    ? ["4K"]
+    : model === "Gemini Omni Flash"
+      ? ["720p"]
+      : model.startsWith("Kling 3.0")
+        ? ["720p", "1080p"]
+        : model === "Grok Imagine Video 1.5"
+          ? ["480p", "720p", "1080p"]
     : model.includes("Fast") || model.includes("Mini")
       ? ["480p", "720p"]
       : model === "Happy Horse 1.1"
         ? ["720p", "1080p"]
         : ["480p", "720p", "1080p", "4K"];
-  const generatorAspectRatioOptions = model.startsWith("Kling 3.0")
+  const generatorAspectRatioOptions = model === "Gemini Omni Flash" || model === "Grok Imagine Video 1.5"
+    ? ["16:9", "9:16"]
+    : model.startsWith("Kling 3.0")
     ? ["16:9", "9:16", "1:1"]
     : ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
+  const generatorDurationOptions = model === "Gemini Omni Flash"
+    ? [3, 5, 8, 10]
+    : model === "Veo 3.1"
+      ? [4, 6, 8]
+      : model === "Grok Imagine Video 1.5"
+        ? [6, 8, 10, 15]
+        : [5, 8, 10, 15];
 
   const selectCreditModel = (nextModel: CreditModel) => {
     setCreditModel(nextModel);
@@ -445,11 +495,15 @@ export default function Home() {
     setGeneratorStatus("ready");
     setGeneratorMessage("Ready for a secure SHAZAN render.");
     setGeneratorVideoUrl("");
+    setGeneratorOutputType(activeMode === "image" ? "image" : "video");
     setGeneratorRequestId("");
   };
 
   const changeModel = (value: string) => {
     setModel(value);
+    if (value === "Gemini Omni Flash" || value === "Veo 3.1") setVideoDuration(8);
+    else if (value === "Grok Imagine Video 1.5") setVideoDuration(6);
+    else setVideoDuration(5);
     clearReferences();
     resetGenerator();
   };
@@ -480,19 +534,15 @@ export default function Home() {
     const nextPrompt = prompt.trim() || promptIdeas[activeMode];
     if (!prompt.trim()) setPrompt(nextPrompt);
 
-    if (activeMode === "video") {
+    if (activeMode === "video" || activeMode === "image") {
       if (generatorStatus === "failed") resetGenerator();
+      setGeneratorOutputType(activeMode);
       setCreationReady(false);
       setVideoGeneratorOpen(true);
       return;
     }
-
-    setGenerating(true);
-    setCreationReady(false);
-    window.setTimeout(() => {
-      setGenerating(false);
-      setCreationReady(true);
-    }, 1800);
+    setGenerating(false);
+    setCreationReady(true);
   };
 
   const requestVideoRender = async () => {
@@ -508,10 +558,16 @@ export default function Home() {
       setGeneratorMessage("Seedance audio reference ke saath kam se kam ek image ya video reference bhi chahiye.");
       return;
     }
+    if ((model === "Grok Imagine Video 1.5" || model === "Kling 3.0 Omni 4K") && references.images.length === 0) {
+      setGeneratorStatus("failed");
+      setGeneratorMessage(`${model} ke liye ek first-frame image required hai.`);
+      return;
+    }
 
     const runId = generatorRunRef.current + 1;
     generatorRunRef.current = runId;
     setGeneratorVideoUrl("");
+    setGeneratorOutputType(activeMode === "image" ? "image" : "video");
     setGeneratorRequestId("");
 
     try {
@@ -555,19 +611,19 @@ export default function Home() {
         resolution: normalizedResolution,
       };
 
-      if (model.startsWith("Seedance 2.0")) {
+      if (activeMode === "image") {
+        if (imageReferences.length) argumentsPayload.image_references = imageReferences;
+      } else if (model.startsWith("Seedance 2.0")) {
         argumentsPayload.generate_audio = true;
         if (imageReferences.length) argumentsPayload.image_references = imageReferences;
         if (videoReferences.length) argumentsPayload.video_references = videoReferences;
         if (audioReferences.length) argumentsPayload.audio_references = audioReferences;
-      } else if (model === "Kling 3.0") {
+      } else if (model === "Kling 3.0 Pro" || model === "Kling 3.0 Omni 4K") {
         argumentsPayload.sound = "on";
         if (imageReferences[0]) argumentsPayload.start_image = imageReferences[0];
         if (imageReferences[1]) argumentsPayload.end_image = imageReferences[1];
       } else if (model === "Kling 3.0 Elements") {
         argumentsPayload.sound = "on";
-        if (videoReferences.length) argumentsPayload.video_references = videoReferences;
-      } else if (model === "Luma Ray3.14") {
         if (videoReferences.length) argumentsPayload.video_references = videoReferences;
       } else {
         if (imageReferences[0]) {
@@ -594,11 +650,12 @@ export default function Home() {
 
       for (let attempt = 0; attempt < 120; attempt += 1) {
         const status = typeof responseRecord.status === "string" ? responseRecord.status.toLowerCase() : "queued";
-        const resultUrl = extractVideoUrl(payload);
-        if (status === "completed" && resultUrl) {
-          setGeneratorVideoUrl(resultUrl);
+        const media = extractMedia(payload);
+        if (status === "completed" && media) {
+          setGeneratorVideoUrl(media.url);
+          setGeneratorOutputType(media.type);
           setGeneratorStatus("completed");
-          setGeneratorMessage("Video ready hai — preview ya download kar sakte hain.");
+          setGeneratorMessage(`${media.type === "image" ? "Image" : media.type === "audio" ? "Audio" : "Video"} ready hai — preview ya download kar sakte hain.`);
           return;
         }
         if (["failed", "nsfw", "canceled", "cancelled"].includes(status)) {
@@ -607,13 +664,13 @@ export default function Home() {
         if (!requestId) throw new Error("Render service ne request ID return nahi ki.");
 
         setGeneratorStatus(status === "in_progress" || status === "processing" ? "processing" : "queued");
-        setGeneratorMessage(status === "in_progress" || status === "processing" ? "SHAZAN video render kar raha hai…" : "Request queue mein hai…");
+        setGeneratorMessage(status === "in_progress" || status === "processing" ? `SHAZAN ${activeMode} render kar raha hai…` : "Request queue mein hai…");
         await new Promise((resolve) => window.setTimeout(resolve, 3000));
         if (generatorRunRef.current !== runId) return;
 
         const statusResponse = await fetch(`/api/studio/status/${encodeURIComponent(requestId)}`, {
-          headers: { "X-Studio-Access": studioAccessCode },
           cache: "no-store",
+          headers: { "X-Studio-Access": studioAccessCode },
         });
         payload = await statusResponse.json().catch(() => ({}));
         if (!statusResponse.ok) throw new Error(extractApiMessage(payload, `Status check failed (${statusResponse.status})`));
@@ -790,7 +847,7 @@ export default function Home() {
         {creationReady && (
           <div className="creation-toast" role="status">
             <span className="toast-preview" />
-            <span><small>Creation complete</small><b>Your {currentMode.label.toLowerCase()} is ready</b></span>
+            <span><small>API connection pending</small><b>{currentMode.label} generator abhi public render ke liye connected nahi hai</b></span>
             <button onClick={() => setCreationReady(false)} aria-label="Close result"><Icon name="close" size={17} /></button>
           </div>
         )}
@@ -800,20 +857,27 @@ export default function Home() {
         <div className="video-generator-overlay" role="presentation">
           <section className="video-generator-modal" role="dialog" aria-modal="true" aria-labelledby="video-generator-title">
             <header className="video-generator-header">
-              <span className="generator-brand"><Icon name="video" size={20} /></span>
-              <span><small>SHAZAN VIDEO GENERATOR</small><b id="video-generator-title">{model}</b></span>
-              <button onClick={() => setVideoGeneratorOpen(false)} aria-label="Close video generator"><Icon name="close" size={21} /></button>
+              <span className="generator-brand"><Icon name={activeMode} size={20} /></span>
+              <span><small>SHAZAN {activeMode.toUpperCase()} GENERATOR</small><b id="video-generator-title">{model}</b></span>
+              <button onClick={() => setVideoGeneratorOpen(false)} aria-label={`Close ${activeMode} generator`}><Icon name="close" size={21} /></button>
             </header>
 
             <div className="video-generator-body">
               <div className={generatorVideoUrl ? "generator-preview has-result" : "generator-preview"}>
                 <span className="generator-preview-badge"><Icon name="sparkle" size={14} /> {videoInputProfile.title}</span>
                 {generatorVideoUrl ? (
-                  <video src={generatorVideoUrl} controls playsInline preload="metadata" />
+                  generatorOutputType === "video" ? (
+                    <video src={generatorVideoUrl} controls playsInline preload="metadata" />
+                  ) : generatorOutputType === "audio" ? (
+                    <audio src={generatorVideoUrl} controls preload="metadata" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={generatorVideoUrl} alt={`${model} generated result`} />
+                  )
                 ) : (
                   <>
                     <span className={generatorBusy ? "generator-play is-loading" : "generator-play"}><Icon name={generatorBusy ? "sparkle" : "play"} size={32} /></span>
-                    <span className="generator-preview-copy"><small>{generatorBusy ? "SHAZAN RENDER" : "PREVIEW CANVAS"}</small><b>{generatorBusy ? generatorMessage : "Your generated shot will appear here"}</b></span>
+                    <span className="generator-preview-copy"><small>{generatorBusy ? "SHAZAN RENDER" : "PREVIEW CANVAS"}</small><b>{generatorBusy ? generatorMessage : `Your generated ${activeMode} will appear here`}</b></span>
                   </>
                 )}
               </div>
@@ -832,7 +896,7 @@ export default function Home() {
                 <div className="generator-control-grid">
                   <label><span>Aspect</span><select value={generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9"} onChange={(event) => setVideoAspectRatio(event.target.value)}>{generatorAspectRatioOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
                   <label><span>Resolution</span><select value={generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p"} onChange={(event) => setVideoResolution(event.target.value)}>{generatorResolutionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-                  <label><span>Duration</span><select value={videoDuration} onChange={(event) => setVideoDuration(Number(event.target.value))}><option value={5}>5 sec</option><option value={8}>8 sec</option><option value={10}>10 sec</option><option value={15}>15 sec</option></select></label>
+                  {activeMode === "video" && <label><span>Duration</span><select value={generatorDurationOptions.includes(videoDuration) ? videoDuration : generatorDurationOptions[0]} onChange={(event) => setVideoDuration(Number(event.target.value))}>{generatorDurationOptions.map((option) => <option value={option} key={option}>{option} sec</option>)}</select></label>}
                 </div>
 
                 <div className="generator-input-summary">
@@ -848,7 +912,14 @@ export default function Home() {
 
                 <label className="generator-access-code">
                   <span>Owner access code</span>
-                  <input type="password" value={studioAccessCode} onChange={(event) => setStudioAccessCode(event.target.value)} placeholder="Cloudflare STUDIO_ACCESS_CODE" autoComplete="current-password" />
+                  <input
+                    type="password"
+                    value={studioAccessCode}
+                    onChange={(event) => setStudioAccessCode(event.target.value)}
+                    autoComplete="current-password"
+                    placeholder="Cloudflare STUDIO_ACCESS_CODE"
+                  />
+                  <small>Credits wallet launch hone tak paid renders owner-only hain.</small>
                 </label>
 
                 {generatorStatus !== "ready" && (
@@ -860,7 +931,7 @@ export default function Home() {
 
                 <div className="generator-actions">
                   <button className="generator-back" onClick={() => setVideoGeneratorOpen(false)}>Back to inputs</button>
-                  <button className="generator-render" onClick={requestVideoRender} disabled={generatorBusy}><Icon name="sparkle" size={18} /> {generatorBusy ? "Generating…" : generatorStatus === "completed" ? "Generate another" : "Generate video"}</button>
+                  <button className="generator-render" onClick={requestVideoRender} disabled={generatorBusy}><Icon name="sparkle" size={18} /> {generatorBusy ? "Generating…" : generatorStatus === "completed" ? "Generate another" : `Generate ${activeMode}`}</button>
                 </div>
               </div>
             </div>
