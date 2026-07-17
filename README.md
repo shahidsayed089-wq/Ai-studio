@@ -1,6 +1,8 @@
 # SHAZAN AI Studio
 
-Premium multi-model generative AI studio built with Next.js static export and Cloudflare Pages.
+Premium multi-model generative AI studio built with Next.js static export and Cloudflare Pages Advanced Mode.
+
+The public product and UI remain SHAZAN AI. A server-side model gateway handles paid requests without exposing its API token or sending users to an external provider login.
 
 ## Local development
 
@@ -22,27 +24,34 @@ npm run build
 
 ## Deploy to Cloudflare Pages
 
-The production build generates the static website, including `index.html`, in `out`.
-The checked-in `wrangler.jsonc` pins that output directory to the `ai-studio-1n1` Pages project.
+The production build generates the static website in `out`. Next.js also copies `public/_worker.js` to `out/_worker.js`; Cloudflare Pages runs it in Advanced Mode for the private `/api/studio/*` bridge.
 
-```bash
-npm run deploy
-```
-
-For the `ai-studio-1n1` Cloudflare Pages project connected to this repository:
+For the existing `ai-studio-1n1` project:
 
 - Production branch: `main`
 - Build command: `npm run build`
 - Build output directory: `out`
 - Node version: `22`
 
-Add these under **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** when the server-side Pages Function is connected:
+Add encrypted secrets under **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** for Production and Preview:
 
-- `HIGGSFIELD_API_KEY` — encrypted secret
-- `HIGGSFIELD_API_BASE_URL` — optional text variable
+- `KIE_API_KEY` — the private model-gateway token
+- `STUDIO_ACCESS_CODE` — an owner-only beta code
 
-Never commit API keys to GitHub or expose them through `NEXT_PUBLIC_` variables.
+Never commit API keys, paste them into client code, or expose them through `NEXT_PUBLIC_` variables.
 
-## Current status
+## Connected video models
 
-The cinematic UI, model catalogue, multimodal limits and credit calculator are implemented. Provider generation endpoints will be connected through a server-side Pages Function after the Higgsfield API key and exact model catalogue are available.
+The bridge currently has verified request mappings for:
+
+- Seedance 2.0 Standard — `bytedance/seedance-2`
+- Seedance 2.0 Fast — `bytedance/seedance-2-fast`
+- Seedance 2.0 Mini — `bytedance/seedance-2-mini`
+- Kling 3.0 / Kling 3.0 Elements — `kling-3.0/video`
+- HappyHorse 1.1 — text, image, or reference-to-video selected from the attached inputs
+
+Other catalogue cards remain visible for product design, but the Worker returns an honest “not connected” response instead of pretending to submit an unsupported model.
+
+## Public-launch safety
+
+Paid generation is owner-only by default. Do not set `STUDIO_ALLOW_PUBLIC=true` until SHAZAN user authentication, a credit wallet, per-user quotas, rate limiting and abuse controls are connected.
