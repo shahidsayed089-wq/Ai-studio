@@ -47,7 +47,7 @@ const modes: { id: Mode; label: string; placeholder: string }[] = [
 
 const modelMap: Record<Mode, string[]> = {
   image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Nano Banana 2 Lite", "Luma UNI-1.1", "FLUX Pro"],
-  video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Kling 3.0 Omni", "Kling 3.0", "Happy Horse 1.1", "Sora 2", "Veo 3.1", "Runway Gen-4.5", "Luma Ray3.2", "Luma Ray3.14"],
+  video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Kling 3.0 Elements", "Kling 3.0", "Happy Horse 1.1", "Sora 2", "Veo 3.1", "Runway Gen-4.5", "Luma Ray3.2", "Luma Ray3.14"],
   music: ["Lyria 3", "AudioFlow", "Suno", "Udio", "Score Composer"],
   voice: ["GPT Realtime Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
@@ -60,7 +60,7 @@ const getApiModelKey = (modelName: string) => {
     "Seedance 2.0 Standard": "seedance_2_0_standard",
     "Seedance 2.0 Fast": "seedance_2_0_fast",
     "Seedance 2.0 Mini": "seedance_2_0_mini",
-    "Kling 3.0 Omni": "kling_3_0_omni",
+    "Kling 3.0 Elements": "kling_3_0_elements",
     "Kling 3.0": "kling_3_0",
     "Happy Horse 1.1": "happy_horse_1_1",
     "Sora 2": "sora_2",
@@ -115,7 +115,7 @@ const extractVideoUrl = (value: unknown): string | null => {
 const seedanceInputProfile: VideoInputProfile = {
   title: "Multimodal references",
   summary: "Seedance only · 9 images + 3 videos + 3 audio",
-  totalLimit: 12,
+  totalLimit: 15,
   slots: [
     { kind: "images", label: "Add images", note: "Max 9", accept: "image/*", limit: 9 },
     { kind: "videos", label: "Add videos", note: "Max 3 · 15s each", accept: "video/*", limit: 3 },
@@ -127,12 +127,12 @@ const getVideoInputProfile = (modelName: string): VideoInputProfile => {
   if (modelName.startsWith("Seedance 2.0")) return seedanceInputProfile;
 
   switch (modelName) {
-    case "Kling 3.0 Omni":
+    case "Kling 3.0 Elements":
       return {
-        title: "Reference video",
-        summary: "Kling Omni · video-guided generation",
+        title: "Video element",
+        summary: "Kling 3.0 · one video element reference",
         totalLimit: 1,
-        slots: [{ kind: "videos", label: "Add reference video", note: "One source clip", accept: "video/*", limit: 1 }],
+        slots: [{ kind: "videos", label: "Add video element", note: "One 3–8s source clip", accept: "video/*", limit: 1 }],
       };
     case "Kling 3.0":
       return {
@@ -250,11 +250,11 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
     { name: "FLUX Pro", maker: "BLACK FOREST", tag: "Photo", art: "world", features: ["Photoreal", "Typography"] },
   ],
   video: [
-    { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "credit mode · from 35 cr" },
-    { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["Unified multimodal inputs", "480p / 720p high volume"], credits: "credit or unlimited mode" },
-    { name: "Seedance 2.0 Mini", maker: "BYTEDANCE", tag: "Mini", art: "ice", features: ["Unified multimodal inputs", "Fast drafts + iteration"], credits: "provider rate at checkout" },
-    { name: "Kling 3.0 Omni", maker: "KLING", tag: "Omni", art: "sculpture", features: ["Reference video workflow", "Native audio · 15s"], credits: "6–16 cr / sec" },
-    { name: "Kling 3.0", maker: "KLING", tag: "Director", art: "portrait", features: ["Start + end frames", "Multi-shot · 15s"], credits: "6–12 cr / sec" },
+    { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "base API rate · from $0.057/sec" },
+    { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["Unified multimodal inputs", "480p / 720p high volume"], credits: "live rate checked before launch" },
+    { name: "Seedance 2.0 Mini", maker: "BYTEDANCE", tag: "Mini", art: "ice", features: ["Unified multimodal inputs", "Fast drafts + iteration"], credits: "live rate checked before launch" },
+    { name: "Kling 3.0 Elements", maker: "KLING", tag: "Elements", art: "sculpture", features: ["Video element reference", "Native sound · 15s"], credits: "base API rate · from $0.07/sec" },
+    { name: "Kling 3.0", maker: "KLING", tag: "Director", art: "portrait", features: ["Start + end frames", "Single-shot · 15s"], credits: "base API rate · from $0.07/sec" },
     { name: "Happy Horse 1.1", maker: "ALIBABA", tag: "1080p", art: "coral", features: ["Text or first frame", "Audio + lip-sync"] },
     { name: "Sora 2", maker: "OPENAI", tag: "Audio", art: "world", features: ["First-frame image", "Synced sound"] },
     { name: "Veo 3.1", maker: "GOOGLE", tag: "Native A/V", art: "ice", features: ["First + last frame", "Native A/V"] },
@@ -283,13 +283,6 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
 type CreditModel = "seedance" | "kling";
 type CreditResolution = "480p" | "720p" | "1080p" | "4K";
 
-const seedancePricing: Record<CreditResolution, { base: number; video: [number, number] }> = {
-  "480p": { base: 35, video: [39, 86] },
-  "720p": { base: 76, video: [84, 186] },
-  "1080p": { base: 187, video: [206, 457] },
-  "4K": { base: 389, video: [420, 933] },
-};
-
 const creditCapabilities = {
   seedance: {
     maker: "BYTEDANCE SEED",
@@ -305,15 +298,15 @@ const creditCapabilities = {
   },
   kling: {
     maker: "KLING AI",
-    name: "Kling 3.0 Omni",
-    subtitle: "Video-guided generation with native audio",
+    name: "Kling 3.0 Elements",
+    subtitle: "Element-guided generation with native sound",
     stats: [
       ["1", "video"],
-      ["4", "elements with video"],
-      ["6", "camera cuts"],
+      ["3", "max elements"],
+      ["4K", "top mode"],
       ["15s", "output"],
     ],
-    features: ["Reference-video workflow", "Optional reusable character or product elements", "Native audio and multi-shot generation", "Start and end frame control in Kling 3.0 mode"],
+    features: ["Image, video or audio element references", "Prompt-addressable reusable elements", "Optional native sound and multi-shot generation", "Start and end frame control in Kling 3.0 mode"],
   },
 } as const;
 
@@ -324,7 +317,7 @@ const modelUniverse: { name: string; mode: Mode }[] = [
   { name: "Seedance 2.0 Standard", mode: "video" },
   { name: "Seedance 2.0 Fast", mode: "video" },
   { name: "Seedance 2.0 Mini", mode: "video" },
-  { name: "Kling 3.0 Omni", mode: "video" },
+  { name: "Kling 3.0 Elements", mode: "video" },
   { name: "Happy Horse 1.1", mode: "video" },
   { name: "Sora 2", mode: "video" },
   { name: "Veo 3.1", mode: "video" },
@@ -388,7 +381,7 @@ export default function Home() {
   const [references, setReferences] = useState<ReferenceFiles>(emptyReferences);
   const [videoGeneratorOpen, setVideoGeneratorOpen] = useState(false);
   const [generatorStatus, setGeneratorStatus] = useState<GeneratorStatus>("ready");
-  const [generatorMessage, setGeneratorMessage] = useState("Ready for a secure Higgsfield render.");
+  const [generatorMessage, setGeneratorMessage] = useState("Ready for a secure SHAZAN render.");
   const [generatorVideoUrl, setGeneratorVideoUrl] = useState("");
   const [generatorRequestId, setGeneratorRequestId] = useState("");
   const [studioAccessCode, setStudioAccessCode] = useState("");
@@ -406,53 +399,31 @@ export default function Home() {
   const currentCreditCapability = creditCapabilities[creditModel];
   const referenceTotal = references.images.length + references.videos.length + references.audio.length;
   const videoInputProfile = getVideoInputProfile(model);
-  const providerUrl = model.startsWith("Seedance 2.0")
-    ? "https://higgsfield.ai/seedance/2.0"
-    : model.startsWith("Kling 3.0")
-      ? "https://higgsfield.ai/kling-3.0"
-      : model === "Sora 2"
-        ? "https://higgsfield.ai/sora-2"
-        : model === "Runway Gen-4.5"
-          ? "https://app.runwayml.com/"
-          : "https://higgsfield.ai/ai-video";
-  const klingResolution = creditResolution === "1080p" ? "1080p" : "720p";
-  const klingRate = creditVideoInput
-    ? (klingResolution === "1080p" ? 16 : 12)
-    : creditNativeAudio
-      ? (klingResolution === "1080p" ? 12 : 9)
-      : (klingResolution === "1080p" ? 8 : 6);
-  const seedanceCredit = seedancePricing[creditResolution];
-  const creditTotal = creditModel === "kling"
-    ? `${klingRate * creditDuration} credits`
-    : creditVideoInput
-      ? `${seedanceCredit.video[0]}–${seedanceCredit.video[1]} credits`
-      : `${seedanceCredit.base} credits`;
-  const creditMath = creditModel === "kling"
-    ? `${klingRate} cr/sec × ${creditDuration} seconds`
-    : creditVideoInput
-      ? `per render · varies with 2–15s reference video`
-      : `per render · image/audio references included`;
+  const baseApiRate = creditModel === "kling" ? 0.07 : 0.057;
+  const creditTotal = `$${(baseApiRate * creditDuration).toFixed(2)}+`;
+  const creditMath = `$${baseApiRate.toFixed(3)}/sec base rate × ${creditDuration} sec`;
   const generatorBusy = generatorStatus === "uploading" || generatorStatus === "queued" || generatorStatus === "processing";
-  const generatorResolutionOptions = model.includes("Fast") || model.includes("Mini")
-    ? ["480p", "720p"]
-    : ["480p", "720p", "1080p", "4k"];
+  const generatorResolutionOptions = model.startsWith("Kling 3.0")
+    ? ["720p", "1080p", "4K"]
+    : model.includes("Fast") || model.includes("Mini")
+      ? ["480p", "720p"]
+      : model === "Happy Horse 1.1"
+        ? ["720p", "1080p"]
+        : ["480p", "720p", "1080p", "4K"];
+  const generatorAspectRatioOptions = model.startsWith("Kling 3.0")
+    ? ["16:9", "9:16", "1:1"]
+    : ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
 
   const selectCreditModel = (nextModel: CreditModel) => {
     setCreditModel(nextModel);
     setCreditVideoInput(false);
     setCreditNativeAudio(true);
-    if (nextModel === "kling" && (creditResolution === "480p" || creditResolution === "4K")) {
+    if (nextModel === "kling" && creditResolution === "480p") {
       setCreditResolution("720p");
     }
   };
 
-  const toggleVideoInput = () => {
-    setCreditVideoInput((value) => {
-      const nextValue = !value;
-      if (creditModel === "kling" && nextValue) setCreditNativeAudio(false);
-      return nextValue;
-    });
-  };
+  const toggleVideoInput = () => setCreditVideoInput((value) => !value);
 
   const addReferences = (kind: ReferenceKind, files: FileList | null, kindLimit: number, totalLimit: number) => {
     if (!files?.length) return;
@@ -472,7 +443,7 @@ export default function Home() {
   const resetGenerator = () => {
     generatorRunRef.current += 1;
     setGeneratorStatus("ready");
-    setGeneratorMessage("Ready for a secure Higgsfield render.");
+    setGeneratorMessage("Ready for a secure SHAZAN render.");
     setGeneratorVideoUrl("");
     setGeneratorRequestId("");
   };
@@ -545,7 +516,7 @@ export default function Home() {
 
     try {
       const uploadFile = async (file: File) => {
-        const response = await fetch("/api/higgsfield/upload", {
+        const response = await fetch("/api/studio/upload", {
           method: "POST",
           headers: {
             "Content-Type": file.type || "application/octet-stream",
@@ -556,7 +527,7 @@ export default function Home() {
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(extractApiMessage(payload, `Upload failed (${response.status})`));
-        if (typeof payload.url !== "string") throw new Error("Higgsfield upload URL nahi mila.");
+        if (typeof payload.url !== "string") throw new Error("Secure upload URL nahi mila.");
         return payload.url as string;
       };
 
@@ -566,7 +537,7 @@ export default function Home() {
         setGeneratorMessage(`${referenceTotal} reference file${referenceTotal === 1 ? "" : "s"} secure upload ho rahe hain…`);
       } else {
         setGeneratorStatus("queued");
-        setGeneratorMessage("Higgsfield ko generation request bhej rahe hain…");
+        setGeneratorMessage("SHAZAN render request prepare ho rahi hai…");
       }
 
       const [imageReferences, videoReferences, audioReferences] = await Promise.all([
@@ -579,24 +550,22 @@ export default function Home() {
       const normalizedResolution = generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p";
       const argumentsPayload: Record<string, unknown> = {
         prompt: cleanPrompt,
-        aspect_ratio: videoAspectRatio,
+        aspect_ratio: generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9",
         duration: videoDuration,
         resolution: normalizedResolution,
       };
 
       if (model.startsWith("Seedance 2.0")) {
         argumentsPayload.generate_audio = true;
-        argumentsPayload.bitrate_mode = "standard";
-        if (!model.includes("Mini")) argumentsPayload.mode = model.includes("Fast") ? "fast" : "std";
         if (imageReferences.length) argumentsPayload.image_references = imageReferences;
         if (videoReferences.length) argumentsPayload.video_references = videoReferences;
         if (audioReferences.length) argumentsPayload.audio_references = audioReferences;
       } else if (model === "Kling 3.0") {
         argumentsPayload.sound = "on";
-        argumentsPayload.mode = normalizedResolution === "4k" ? "4k" : normalizedResolution === "1080p" ? "pro" : "std";
         if (imageReferences[0]) argumentsPayload.start_image = imageReferences[0];
         if (imageReferences[1]) argumentsPayload.end_image = imageReferences[1];
-      } else if (model === "Kling 3.0 Omni") {
+      } else if (model === "Kling 3.0 Elements") {
+        argumentsPayload.sound = "on";
         if (videoReferences.length) argumentsPayload.video_references = videoReferences;
       } else if (model === "Luma Ray3.14") {
         if (videoReferences.length) argumentsPayload.video_references = videoReferences;
@@ -610,7 +579,7 @@ export default function Home() {
 
       setGeneratorStatus("queued");
       setGeneratorMessage("Request accepted hone ka wait kar rahe hain…");
-      const submitResponse = await fetch("/api/higgsfield/generate", {
+      const submitResponse = await fetch("/api/studio/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Studio-Access": studioAccessCode },
         body: JSON.stringify({ model: getApiModelKey(model), arguments: argumentsPayload }),
@@ -633,16 +602,16 @@ export default function Home() {
           return;
         }
         if (["failed", "nsfw", "canceled", "cancelled"].includes(status)) {
-          throw new Error(extractApiMessage(payload, status === "nsfw" ? "Prompt moderation mein reject hua; provider credits refund karega." : `Generation ${status}.`));
+          throw new Error(extractApiMessage(payload, status === "nsfw" ? "Prompt moderation mein reject hua; failed task charge nahi hoga." : `Generation ${status}.`));
         }
-        if (!requestId) throw new Error("Higgsfield ne request ID return nahi ki.");
+        if (!requestId) throw new Error("Render service ne request ID return nahi ki.");
 
         setGeneratorStatus(status === "in_progress" || status === "processing" ? "processing" : "queued");
-        setGeneratorMessage(status === "in_progress" || status === "processing" ? "Higgsfield video render kar raha hai…" : "Request queue mein hai…");
+        setGeneratorMessage(status === "in_progress" || status === "processing" ? "SHAZAN video render kar raha hai…" : "Request queue mein hai…");
         await new Promise((resolve) => window.setTimeout(resolve, 3000));
         if (generatorRunRef.current !== runId) return;
 
-        const statusResponse = await fetch(`/api/higgsfield/status/${encodeURIComponent(requestId)}`, {
+        const statusResponse = await fetch(`/api/studio/status/${encodeURIComponent(requestId)}`, {
           headers: { "X-Studio-Access": studioAccessCode },
           cache: "no-store",
         });
@@ -844,7 +813,7 @@ export default function Home() {
                 ) : (
                   <>
                     <span className={generatorBusy ? "generator-play is-loading" : "generator-play"}><Icon name={generatorBusy ? "sparkle" : "play"} size={32} /></span>
-                    <span className="generator-preview-copy"><small>{generatorBusy ? "HIGGSFIELD RENDER" : "PREVIEW CANVAS"}</small><b>{generatorBusy ? generatorMessage : "Your generated shot will appear here"}</b></span>
+                    <span className="generator-preview-copy"><small>{generatorBusy ? "SHAZAN RENDER" : "PREVIEW CANVAS"}</small><b>{generatorBusy ? generatorMessage : "Your generated shot will appear here"}</b></span>
                   </>
                 )}
               </div>
@@ -861,7 +830,7 @@ export default function Home() {
                 </label>
 
                 <div className="generator-control-grid">
-                  <label><span>Aspect</span><select value={videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>21:9</option></select></label>
+                  <label><span>Aspect</span><select value={generatorAspectRatioOptions.includes(videoAspectRatio) ? videoAspectRatio : "16:9"} onChange={(event) => setVideoAspectRatio(event.target.value)}>{generatorAspectRatioOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
                   <label><span>Resolution</span><select value={generatorResolutionOptions.includes(videoResolution) ? videoResolution : "720p"} onChange={(event) => setVideoResolution(event.target.value)}>{generatorResolutionOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
                   <label><span>Duration</span><select value={videoDuration} onChange={(event) => setVideoDuration(Number(event.target.value))}><option value={5}>5 sec</option><option value={8}>8 sec</option><option value={10}>10 sec</option><option value={15}>15 sec</option></select></label>
                 </div>
@@ -893,7 +862,6 @@ export default function Home() {
                   <button className="generator-back" onClick={() => setVideoGeneratorOpen(false)}>Back to inputs</button>
                   <button className="generator-render" onClick={requestVideoRender} disabled={generatorBusy}><Icon name="sparkle" size={18} /> {generatorBusy ? "Generating…" : generatorStatus === "completed" ? "Generate another" : "Generate video"}</button>
                 </div>
-                {generatorStatus === "failed" && <a className="generator-fallback" href={providerUrl} target="_blank" rel="noreferrer">Open provider directly <Icon name="arrow" size={15} /></a>}
               </div>
             </div>
           </section>
@@ -950,17 +918,17 @@ export default function Home() {
         <div className="credit-lab-heading">
           <div>
             <p className="kicker">NO SURPRISE BILLING · VERIFIED LIMITS</p>
-            <h2 id="credit-lab-title">Know every input.<br /><em>See every credit.</em></h2>
+            <h2 id="credit-lab-title">Know every input.<br /><em>See the base cost.</em></h2>
           </div>
-          <p>Choose a model and settings before you generate. The exact model rate and reference capacity stay visible at every step.</p>
+          <p>Choose a model and settings before you generate. Verified reference capacity and the current public base-rate estimate stay visible at every step.</p>
         </div>
 
         <div className="credit-model-tabs" role="tablist" aria-label="Credit model">
           <button className={creditModel === "seedance" ? "active" : ""} onClick={() => selectCreditModel("seedance")} role="tab" aria-selected={creditModel === "seedance"}>
-            <span><Icon name="video" size={20} /></span><b>Seedance 2.0 Standard</b><small>from 35 credits</small>
+            <span><Icon name="video" size={20} /></span><b>Seedance 2.0 Standard</b><small>from $0.057/sec</small>
           </button>
           <button className={creditModel === "kling" ? "active" : ""} onClick={() => selectCreditModel("kling")} role="tab" aria-selected={creditModel === "kling"}>
-            <span><Icon name="layers" size={20} /></span><b>Kling 3.0 Omni</b><small>6–16 credits/sec</small>
+            <span><Icon name="layers" size={20} /></span><b>Kling 3.0 Elements</b><small>from $0.07/sec</small>
           </button>
         </div>
 
@@ -984,13 +952,13 @@ export default function Home() {
 
             <p className="ledger-note">
               {creditModel === "seedance"
-                ? "Use up to 12 assets total in one instruction, within per-type caps of 9 images, 3 videos and 3 audio clips."
-                : "Kling Omni uses a video-guided workflow. This is not presented as Seedance-style image + video + audio multimodal input."}
+                ? "Use up to 15 assets total in one instruction, within per-type caps of 9 images, 3 videos and 3 audio clips."
+                : "Kling Elements accepts prompt-addressable image, video or audio elements. It is not presented as Seedance-style 9 + 3 + 3 multimodal input."}
             </p>
           </article>
 
           <article className="credit-calculator">
-            <header><span><small>LIVE CREDIT CALCULATOR</small><b>Generation estimate</b></span><Icon name="sliders" size={22} /></header>
+            <header><span><small>BASE API COST PREVIEW</small><b>Generation estimate</b></span><Icon name="sliders" size={22} /></header>
 
             <div className="calculator-fields">
               <label>
@@ -999,15 +967,14 @@ export default function Home() {
                   {creditModel === "seedance" && <option>480p</option>}
                   <option>720p</option>
                   <option>1080p</option>
-                  {creditModel === "seedance" && <option>4K</option>}
+                  <option>4K</option>
                 </select>
               </label>
               <label>
                 <span>Duration</span>
-                <select value={creditDuration} onChange={(event) => setCreditDuration(Number(event.target.value))} disabled={creditModel === "seedance"}>
+                <select value={creditDuration} onChange={(event) => setCreditDuration(Number(event.target.value))}>
                   <option value={5}>5 seconds</option><option value={10}>10 seconds</option><option value={15}>15 seconds</option>
                 </select>
-                {creditModel === "seedance" && <small>Seedance billed per render</small>}
               </label>
             </div>
 
@@ -1015,19 +982,19 @@ export default function Home() {
               <button className={creditVideoInput ? "active" : ""} onClick={toggleVideoInput} aria-pressed={creditVideoInput}>
                 <span><Icon name="video" size={18} /><b>Video reference</b></span><i />
               </button>
-              <button className={creditNativeAudio ? "active" : ""} onClick={() => setCreditNativeAudio((value) => !value)} aria-pressed={creditNativeAudio} disabled={creditModel === "kling" && creditVideoInput}>
+              <button className={creditNativeAudio ? "active" : ""} onClick={() => setCreditNativeAudio((value) => !value)} aria-pressed={creditNativeAudio}>
                 <span><Icon name="voice" size={18} /><b>Native audio</b></span><i />
               </button>
             </div>
 
-            {creditModel === "kling" && creditVideoInput && <p className="calculator-warning">Kling 3.0 Omni does not currently support native audio when a video reference is supplied.</p>}
-            {creditModel === "seedance" && <p className="calculator-info">Native audio is included in Seedance 2.0 pricing; the audio switch does not add credits.</p>}
+            {creditModel === "kling" && creditVideoInput && <p className="calculator-info">Kling 3.0 uses the uploaded clip as a prompt-addressable video element.</p>}
+            {creditModel === "seedance" && <p className="calculator-info">Seedance keeps image, video and audio references inside its dedicated multimodal workflow.</p>}
 
             <div className="credit-total">
-              <span><small>ESTIMATED CHARGE</small><b>{creditTotal}</b><em>{creditMath}</em></span>
+              <span><small>PUBLIC BASE ESTIMATE</small><b>{creditTotal}</b><em>{creditMath}</em></span>
               <span className="credit-coin"><Icon name="sparkle" size={25} /></span>
             </div>
-            <p className="rate-note">Provider-aligned launch estimate. Your final charge is always shown before generation.</p>
+            <p className="rate-note">Base public API estimate only; mode and resolution can change actual usage. SHAZAN customer credits will launch only after wallet and rate-lock are connected.</p>
           </article>
         </div>
       </section>
