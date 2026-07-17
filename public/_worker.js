@@ -2,6 +2,7 @@ const KIE_API_BASE_URL = "https://api.kie.ai";
 const KIE_UPLOAD_BASE_URL = "https://kieai.redpandaai.co";
 const FAL_QUEUE_BASE_URL = "https://queue.fal.run";
 const FAL_STORAGE_BASE_URL = "https://rest.fal.ai";
+const OPENAI_API_BASE_URL = "https://api.openai.com";
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 const KIE_MARKET_MODELS = {
@@ -24,6 +25,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 
 const getFalKey = (env) => typeof env.FAL_KEY === "string" ? env.FAL_KEY.trim() : "";
 const getKieKey = (env) => typeof env.KIE_API_KEY === "string" ? env.KIE_API_KEY.trim() : "";
+const getOpenAIKey = (env) => typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY.trim() : "";
 const getKieApiBase = (env) => (env.KIE_API_BASE_URL || KIE_API_BASE_URL).replace(/\/$/, "");
 const getKieUploadBase = (env) => (env.KIE_UPLOAD_BASE_URL || KIE_UPLOAD_BASE_URL).replace(/\/$/, "");
 
@@ -267,6 +269,33 @@ const buildFalMusicTask = (model, args) => {
   return null;
 };
 
+const buildFalVoiceTask = (model, args) => {
+  const text = args.prompt.trim();
+  const voice = typeof args.voice === "string" && /^[a-zA-Z0-9 _-]{2,80}$/.test(args.voice) ? args.voice : "Rachel";
+  if (model === "elevenlabs_voice") {
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/elevenlabs/tts/eleven-v3",
+      input: { text, voice, stability: 0.5, apply_text_normalization: "auto" },
+    };
+  }
+  if (model === "multilingual_pro") {
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/elevenlabs/tts/multilingual-v2",
+      input: { text, voice, stability: 0.5, similarity_boost: 0.75, speed: 1, apply_text_normalization: "auto" },
+    };
+  }
+  if (model === "voice_forge") {
+    return {
+      provider: "fal",
+      modelPath: "fal-ai/elevenlabs/text-to-voice/design/eleven-v3",
+      input: { prompt: text, auto_generate_text: true, loudness: 0.5, guidance_scale: 5, output_format: "mp3_44100_128" },
+    };
+  }
+  return null;
+};
+
 const buildFalTask = (model, args) => {
   if (model === "seedance_2_0_standard" || model === "seedance_2_0_fast") return buildFalSeedanceTask(model, args);
   if (model === "kling_3_0" || model === "kling_3_0_omni") return buildFalKlingTask(model, args);
@@ -274,7 +303,7 @@ const buildFalTask = (model, args) => {
   if (model === "grok_imagine_video_1_5") return buildFalGrokVideoTask(args);
   if (model === "happy_horse_1_1") return buildFalHappyHorseTask(args);
   if (model === "veo_3_1") return buildFalVeoTask(args);
-  return buildFalImageTask(model, args) || buildFalMusicTask(model, args);
+  return buildFalImageTask(model, args) || buildFalMusicTask(model, args) || buildFalVoiceTask(model, args);
 };
 
 const buildKieSeedanceInput = (args) => {
@@ -499,7 +528,38 @@ const submitSunoTask = async (env, apiKey, args) => {
   return json({ request_id: `suno.${requestId}`, status: "queued", provider: "kie" });
 };
 
-const handleGenerate = async (request, env, falKey, kieKey) => {
+const submitOpenAITts = async (env, openAIKey, falKey, args) => {
+  const allowedVoices = new Set(["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar"]);
+  const voice = allowedVoices.has(args.voice) ? args.voice : "marin";
+  const response = await fetch(`${(env.OPENAI_API_BASE_URL || OPENAI_API_BASE_URL).replace(/\/$/, "")}/v1/audio/speech`, {
+    method: "POST",
+    headers: {
+      Accept: "audio/mpeg",
+      Authorization: `Bearer ${openAIKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini-tts",
+      input: args.prompt.trim().slice(0, 4096),
+      voice,
+      instructions: "Natural cinematic delivery. Preserve the speaker's language, pronunciation and emotional intent.",
+      response_format: "mp3",
+    }),
+  });
+  if (!response.ok) return upstreamError(await readJson(response), "GPT voice generation start nahi hui.");
+  const bytes = await response.arrayBuffer();
+  if (!bytes.byteLength) return json({ error: "GPT voice audio empty tha." }, 502);
+  const uploaded = await uploadToFal(env, falKey, bytes, "audio/mpeg", "gpt-voice.mp3");
+  if (uploaded.errorResponse) return uploaded.errorResponse;
+  return json({
+    request_id: `openai.${crypto.randomUUID()}`,
+    status: "completed",
+    provider: "openai",
+    output: { url: uploaded.url, type: "audio" },
+  });
+};
+
+const handleGenerate = async (request, env, falKey, kieKey, openAIKey) => {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
   let body;
   try {
@@ -520,6 +580,13 @@ const handleGenerate = async (request, env, falKey, kieKey) => {
       message: "Suno exact music route ke liye Cloudflare mein encrypted KIE_API_KEY add karein.",
     }, 503);
     return submitSunoTask(env, kieKey, args);
+  }
+  if (model === "gpt_voice") {
+    if (!openAIKey || !falKey) return json({
+      error: "GPT Voice is not configured",
+      message: "Cloudflare Production mein encrypted OPENAI_API_KEY aur FAL_KEY dono required hain.",
+    }, 503);
+    return submitOpenAITts(env, openAIKey, falKey, args);
   }
 
   let task = falKey ? buildFalTask(model, args) : null;
@@ -675,7 +742,8 @@ const handleStudio = async (request, env, pathname) => {
   if (authError) return authError;
   const falKey = getFalKey(env);
   const kieKey = getKieKey(env);
-  if (!falKey && !kieKey) {
+  const openAIKey = getOpenAIKey(env);
+  if (!falKey && !kieKey && !openAIKey) {
     return json({
       error: "Generation service not configured",
       message: "Cloudflare mein encrypted FAL_KEY add karein; KIE_API_KEY optional fallback hai.",
@@ -685,7 +753,7 @@ const handleStudio = async (request, env, pathname) => {
   const path = pathname.slice("/api/studio/".length).split("/").filter(Boolean);
   try {
     if (path[0] === "upload" && path.length === 1) return await handleUpload(request, env, falKey, kieKey);
-    if (path[0] === "generate" && path.length === 1) return await handleGenerate(request, env, falKey, kieKey);
+    if (path[0] === "generate" && path.length === 1) return await handleGenerate(request, env, falKey, kieKey, openAIKey);
     if (path[0] === "status" && path[1] && path.length === 2) return await handleStatus(request, env, falKey, kieKey, path[1]);
     return json({ error: "Studio route not found." }, 404);
   } catch (error) {
