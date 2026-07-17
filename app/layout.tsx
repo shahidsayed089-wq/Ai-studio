@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description:
     "A cinematic generative AI studio for image, video, music, voice, avatars and creative enhancement.",
   other: {
-    "codex-preview": "development",
+    "shazan-api-bridge": "higgsfield-advanced-v1",
   },
   icons: {
     icon: "/favicon.svg",
