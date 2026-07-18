@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS auth_users (
+CREATE TABLE IF NOT EXISTS shazan_auth_users_v1 (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,
   display_name TEXT NOT NULL,
@@ -13,22 +13,22 @@ CREATE TABLE IF NOT EXISTS auth_users (
   last_login_at INTEGER
 );
 
-CREATE INDEX IF NOT EXISTS auth_users_status_idx ON auth_users(status);
+CREATE INDEX IF NOT EXISTS shazan_auth_users_v1_status_idx ON shazan_auth_users_v1(status);
 
-CREATE TABLE IF NOT EXISTS auth_sessions (
+CREATE TABLE IF NOT EXISTS shazan_auth_sessions_v1 (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES shazan_auth_users_v1(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS auth_sessions_token_idx ON auth_sessions(token_hash);
-CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS shazan_auth_sessions_v1_token_idx ON shazan_auth_sessions_v1(token_hash);
+CREATE INDEX IF NOT EXISTS shazan_auth_sessions_v1_expiry_idx ON shazan_auth_sessions_v1(expires_at);
 
-CREATE TABLE IF NOT EXISTS auth_attempts (
+CREATE TABLE IF NOT EXISTS shazan_auth_attempts_v1 (
   scope_key TEXT PRIMARY KEY,
   attempt_count INTEGER NOT NULL,
   window_started_at INTEGER NOT NULL,
