@@ -871,9 +871,11 @@ export default function Home() {
           ? { name: authName, email: authEmail, password: authPassword }
           : { email: authEmail, password: authPassword }),
       });
-      const payload = await response.json().catch(() => ({})) as { authenticated?: boolean; user?: AuthUser; error?: string; message?: string };
+      const responseText = await response.text();
+      let payload: { authenticated?: boolean; user?: AuthUser; error?: string; message?: string } = {};
+      try { payload = JSON.parse(responseText); } catch { payload = {}; }
       if (!response.ok || !payload.authenticated || !payload.user) {
-        throw new Error(payload.message || payload.error || "Account request complete nahi hui.");
+        throw new Error(payload.message || payload.error || `Account request failed (${response.status}).`);
       }
       setAuthUser(payload.user);
       setAuthPassword("");
