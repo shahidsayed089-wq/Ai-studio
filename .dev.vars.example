@@ -7,6 +7,9 @@ OPENAI_API_KEY=replace-with-your-private-openai-key
 # Owner gate stays enabled until SHAZAN user accounts and credit wallets launch.
 STUDIO_ACCESS_CODE=replace-with-a-long-private-owner-code
 
+# Password hashing pepper for D1-backed login/register. Use a random 32+ character secret.
+AUTH_PEPPER=replace-with-at-least-32-random-characters
+
 # Optional fallback for Seedance Mini and Kling Elements.
 KIE_API_KEY=replace-with-your-private-kie-key
 
