@@ -4,6 +4,45 @@ const FAL_QUEUE_BASE_URL = "https://queue.fal.run";
 const FAL_STORAGE_BASE_URL = "https://rest.fal.ai";
 const OPENAI_API_BASE_URL = "https://api.openai.com";
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const AUTH_COOKIE = "__Host-shazan_session";
+const AUTH_SESSION_SECONDS = 30 * 24 * 60 * 60;
+const AUTH_PBKDF2_ITERATIONS = 310000;
+
+const AUTH_SCHEMA_SQL = `
+PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  display_name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  password_salt TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
+  credits INTEGER NOT NULL DEFAULT 0 CHECK (credits >= 0),
+  email_verified INTEGER NOT NULL DEFAULT 0 CHECK (email_verified IN (0, 1)),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  last_login_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS users_status_idx ON users(status);
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
+CREATE TABLE IF NOT EXISTS auth_attempts (
+  scope_key TEXT PRIMARY KEY,
+  attempt_count INTEGER NOT NULL,
+  window_started_at INTEGER NOT NULL,
+  blocked_until INTEGER NOT NULL DEFAULT 0
+);
+`;
 
 const KIE_MARKET_MODELS = {
   seedance_2_0_standard: "bytedance/seedance-2",
@@ -13,13 +52,15 @@ const KIE_MARKET_MODELS = {
   runway_gen_4_5: "runway_gen_4_5",
 };
 
-const json = (data, status = 200) => new Response(JSON.stringify(data), {
+const json = (data, status = 200, extraHeaders = {}) => new Response(JSON.stringify(data), {
   status,
   headers: {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
     "X-Robots-Tag": "noindex, nofollow",
+    "Referrer-Policy": "no-referrer",
+    ...extraHeaders,
   },
 });
 
@@ -435,6 +476,290 @@ const safeEqual = (left, right) => {
   return mismatch === 0;
 };
 
+const authSchemaReady = new WeakSet();
+const textEncoder = new TextEncoder();
+
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+const bytesToBase64Url = (bytes) => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+const randomToken = (size = 32) => {
+  const bytes = new Uint8Array(size);
+  crypto.getRandomValues(bytes);
+  return bytesToBase64Url(bytes);
+};
+
+const sha256 = async (value) => bytesToBase64Url(new Uint8Array(
+  await crypto.subtle.digest("SHA-256", textEncoder.encode(value)),
+));
+
+const hashPassword = async (password, salt, pepper) => {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    textEncoder.encode(`${password}\u0000${pepper}`),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const derived = await crypto.subtle.deriveBits({
+    name: "PBKDF2",
+    hash: "SHA-256",
+    salt: textEncoder.encode(salt),
+    iterations: AUTH_PBKDF2_ITERATIONS,
+  }, key, 256);
+  return bytesToBase64Url(new Uint8Array(derived));
+};
+
+const ensureAuthSchema = async (db) => {
+  if (authSchemaReady.has(db)) return;
+  await db.exec(AUTH_SCHEMA_SQL);
+  authSchemaReady.add(db);
+};
+
+const getAuthRuntime = async (env) => {
+  if (!env.DB || typeof env.DB.prepare !== "function" || typeof env.DB.exec !== "function") {
+    return { error: json({
+      error: "Account database setup pending",
+      message: "Cloudflare D1 database ko DB binding naam se connect karke deployment retry karein.",
+    }, 503) };
+  }
+  const pepper = typeof env.AUTH_PEPPER === "string" ? env.AUTH_PEPPER.trim() : "";
+  if (pepper.length < 32) {
+    return { error: json({
+      error: "Account security secret missing",
+      message: "Cloudflare mein minimum 32-character encrypted AUTH_PEPPER secret add karein.",
+    }, 503) };
+  }
+  await ensureAuthSchema(env.DB);
+  return { db: env.DB, pepper };
+};
+
+const parseCookies = (request) => {
+  const cookies = new Map();
+  for (const item of (request.headers.get("Cookie") || "").split(";")) {
+    const separator = item.indexOf("=");
+    if (separator < 1) continue;
+    const key = item.slice(0, separator).trim();
+    const value = item.slice(separator + 1).trim();
+    if (key) cookies.set(key, value);
+  }
+  return cookies;
+};
+
+const sessionCookie = (token) => `${AUTH_COOKIE}=${token}; Path=/; Max-Age=${AUTH_SESSION_SECONDS}; HttpOnly; Secure; SameSite=Lax`;
+const expiredSessionCookie = () => `${AUTH_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+
+const sameOriginMutationError = (request) => {
+  const fetchSite = request.headers.get("Sec-Fetch-Site");
+  if (fetchSite === "cross-site") return json({ error: "Cross-site request blocked." }, 403);
+  const origin = request.headers.get("Origin");
+  if (origin && origin !== new URL(request.url).origin) return json({ error: "Cross-site request blocked." }, 403);
+  return null;
+};
+
+const readAuthBody = async (request) => {
+  const contentType = request.headers.get("Content-Type") || "";
+  if (!contentType.toLowerCase().startsWith("application/json")) return { error: json({ error: "JSON request required." }, 415) };
+  const contentLength = Number(request.headers.get("Content-Length") || 0);
+  if (contentLength > 32 * 1024) return { error: json({ error: "Request body too large." }, 413) };
+  const raw = await request.text();
+  if (raw.length > 32 * 1024) return { error: json({ error: "Request body too large." }, 413) };
+  try {
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid");
+    return { value };
+  } catch {
+    return { error: json({ error: "Invalid JSON request." }, 400) };
+  }
+};
+
+const normalizeEmail = (value) => typeof value === "string" ? value.trim().toLowerCase() : "";
+const validEmail = (email) => email.length >= 5 && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(email);
+const normalizeDisplayName = (value) => typeof value === "string" ? value.normalize("NFKC").trim().replace(/\s+/g, " ") : "";
+const validDisplayName = (name) => name.length >= 2 && name.length <= 40 && /^[\p{L}\p{M}\p{N} .'’-]+$/u.test(name);
+
+const passwordValidationMessage = (password) => {
+  if (typeof password !== "string" || password.length < 12 || password.length > 128) return "Password 12–128 characters ka hona chahiye.";
+  if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return "Password mein uppercase, lowercase, number aur symbol required hain.";
+  }
+  return "";
+};
+
+const authClientIp = (request) => request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "unknown";
+
+const rateLimitKey = async (scope, request, pepper, identity = "") => sha256(`${scope}\u0000${authClientIp(request)}\u0000${identity}\u0000${pepper}`);
+
+const getRateLimit = async (db, scopeKey, limit, windowSeconds) => {
+  const current = nowSeconds();
+  const row = await db.prepare("SELECT attempt_count, window_started_at, blocked_until FROM auth_attempts WHERE scope_key = ? LIMIT 1").bind(scopeKey).first();
+  if (!row) return null;
+  if (Number(row.blocked_until) > current) return Math.max(1, Number(row.blocked_until) - current);
+  if (current - Number(row.window_started_at) >= windowSeconds) {
+    await db.prepare("DELETE FROM auth_attempts WHERE scope_key = ?").bind(scopeKey).run();
+    return null;
+  }
+  if (Number(row.attempt_count) >= limit) return Math.max(1, windowSeconds - (current - Number(row.window_started_at)));
+  return null;
+};
+
+const recordRateEvent = async (db, scopeKey, limit, windowSeconds) => {
+  const current = nowSeconds();
+  const row = await db.prepare("SELECT attempt_count, window_started_at FROM auth_attempts WHERE scope_key = ? LIMIT 1").bind(scopeKey).first();
+  const expired = !row || current - Number(row.window_started_at) >= windowSeconds;
+  const count = expired ? 1 : Number(row.attempt_count) + 1;
+  const windowStarted = expired ? current : Number(row.window_started_at);
+  const blockedUntil = count >= limit ? windowStarted + windowSeconds : 0;
+  await db.prepare(`INSERT INTO auth_attempts (scope_key, attempt_count, window_started_at, blocked_until)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(scope_key) DO UPDATE SET attempt_count = excluded.attempt_count, window_started_at = excluded.window_started_at, blocked_until = excluded.blocked_until`)
+    .bind(scopeKey, count, windowStarted, blockedUntil).run();
+};
+
+const clearRateLimit = (db, scopeKey) => db.prepare("DELETE FROM auth_attempts WHERE scope_key = ?").bind(scopeKey).run();
+
+const publicAuthUser = (row) => ({
+  id: row.id,
+  email: row.email,
+  name: row.display_name,
+  role: row.role,
+  credits: Number(row.credits) || 0,
+});
+
+const createSession = async (db, userId) => {
+  const token = randomToken(32);
+  const tokenHash = await sha256(token);
+  const current = nowSeconds();
+  await db.prepare(`INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(crypto.randomUUID(), userId, tokenHash, current + AUTH_SESSION_SECONDS, current, current).run();
+  return token;
+};
+
+const getSession = async (request, db) => {
+  const token = parseCookies(request).get(AUTH_COOKIE);
+  if (!token || !/^[A-Za-z0-9_-]{40,60}$/.test(token)) return null;
+  const tokenHash = await sha256(token);
+  const row = await db.prepare(`SELECT s.id AS session_id, s.expires_at, s.last_seen_at,
+      u.id, u.email, u.display_name, u.role, u.status, u.credits
+    FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.token_hash = ? LIMIT 1`).bind(tokenHash).first();
+  if (!row) return null;
+  const current = nowSeconds();
+  if (Number(row.expires_at) <= current || row.status !== "active") {
+    await db.prepare("DELETE FROM sessions WHERE id = ?").bind(row.session_id).run();
+    return null;
+  }
+  if (current - Number(row.last_seen_at) > 60 * 60) {
+    await db.prepare("UPDATE sessions SET last_seen_at = ? WHERE id = ?").bind(current, row.session_id).run();
+  }
+  return { row, tokenHash };
+};
+
+const handleAuthRegister = async (request, db, pepper) => {
+  const originError = sameOriginMutationError(request);
+  if (originError) return originError;
+  const parsed = await readAuthBody(request);
+  if (parsed.error) return parsed.error;
+  const email = normalizeEmail(parsed.value.email);
+  const displayName = normalizeDisplayName(parsed.value.name);
+  const password = parsed.value.password;
+  if (!validDisplayName(displayName)) return json({ error: "Name 2–40 letters ka hona chahiye." }, 400);
+  if (!validEmail(email)) return json({ error: "Valid email address enter karein." }, 400);
+  const passwordError = passwordValidationMessage(password);
+  if (passwordError) return json({ error: passwordError }, 400);
+
+  const scopeKey = await rateLimitKey("register", request, pepper);
+  const retryAfter = await getRateLimit(db, scopeKey, 5, 60 * 60);
+  if (retryAfter) return json({ error: "Too many registration attempts. Baad mein retry karein." }, 429, { "Retry-After": String(retryAfter) });
+  await recordRateEvent(db, scopeKey, 5, 60 * 60);
+
+  const existing = await db.prepare("SELECT id FROM users WHERE email = ? LIMIT 1").bind(email).first();
+  if (existing) return json({ error: "Is email ka account already hai. Sign in karein." }, 409);
+
+  const salt = randomToken(16);
+  const passwordHash = await hashPassword(password, salt, pepper);
+  const current = nowSeconds();
+  const userId = crypto.randomUUID();
+  try {
+    await db.prepare(`INSERT INTO users (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'user', 'active', 0, 0, ?, ?)`)
+      .bind(userId, email, displayName, passwordHash, salt, current, current).run();
+  } catch (error) {
+    if (/unique|constraint/i.test(String(error?.message || error))) return json({ error: "Is email ka account already hai. Sign in karein." }, 409);
+    throw error;
+  }
+  const token = await createSession(db, userId);
+  return json({ authenticated: true, user: { id: userId, email, name: displayName, role: "user", credits: 0 } }, 201, {
+    "Set-Cookie": sessionCookie(token),
+  });
+};
+
+const handleAuthLogin = async (request, db, pepper) => {
+  const originError = sameOriginMutationError(request);
+  if (originError) return originError;
+  const parsed = await readAuthBody(request);
+  if (parsed.error) return parsed.error;
+  const email = normalizeEmail(parsed.value.email);
+  const password = typeof parsed.value.password === "string" ? parsed.value.password : "";
+  if (!validEmail(email) || !password || password.length > 128) return json({ error: "Email ya password galat hai." }, 401);
+
+  const scopeKey = await rateLimitKey("login", request, pepper, email);
+  const retryAfter = await getRateLimit(db, scopeKey, 5, 15 * 60);
+  if (retryAfter) return json({ error: "Too many login attempts. 15 minute baad retry karein." }, 429, { "Retry-After": String(retryAfter) });
+
+  const user = await db.prepare(`SELECT id, email, display_name, password_hash, password_salt, role, status, credits
+    FROM users WHERE email = ? LIMIT 1`).bind(email).first();
+  const candidateHash = user
+    ? await hashPassword(password, user.password_salt, pepper)
+    : await hashPassword(password, "not-a-real-user-salt", pepper);
+  if (!user || !safeEqual(candidateHash, user.password_hash) || user.status !== "active") {
+    await recordRateEvent(db, scopeKey, 5, 15 * 60);
+    return json({ error: "Email ya password galat hai." }, 401);
+  }
+
+  await clearRateLimit(db, scopeKey);
+  const current = nowSeconds();
+  await db.prepare("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?").bind(current, current, user.id).run();
+  const token = await createSession(db, user.id);
+  return json({ authenticated: true, user: publicAuthUser(user) }, 200, { "Set-Cookie": sessionCookie(token) });
+};
+
+const handleAuthSession = async (request, db) => {
+  const session = await getSession(request, db);
+  if (!session) return json({ authenticated: false, user: null });
+  return json({ authenticated: true, user: publicAuthUser(session.row) });
+};
+
+const handleAuthLogout = async (request, db) => {
+  const originError = sameOriginMutationError(request);
+  if (originError) return originError;
+  const token = parseCookies(request).get(AUTH_COOKIE);
+  if (token) await db.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await sha256(token)).run();
+  return json({ authenticated: false, user: null }, 200, { "Set-Cookie": expiredSessionCookie() });
+};
+
+const handleAuth = async (request, env, pathname) => {
+  const runtime = await getAuthRuntime(env);
+  if (runtime.error) return runtime.error;
+  try {
+    if (pathname === "/api/auth/session" && request.method === "GET") return handleAuthSession(request, runtime.db);
+    if (pathname === "/api/auth/register" && request.method === "POST") return handleAuthRegister(request, runtime.db, runtime.pepper);
+    if (pathname === "/api/auth/login" && request.method === "POST") return handleAuthLogin(request, runtime.db, runtime.pepper);
+    if (pathname === "/api/auth/logout" && request.method === "POST") return handleAuthLogout(request, runtime.db);
+    return json({ error: "Auth route not found." }, 404);
+  } catch {
+    return json({
+      error: "Account service unavailable.",
+      message: "Temporary authentication service error. Thodi der baad retry karein.",
+    }, 500);
+  }
+};
+
 const normalizeAccessCode = (value) => {
   const code = typeof value === "string" ? value.trim() : "";
   const first = code[0];
@@ -824,6 +1149,7 @@ const handleStudio = async (request, env, pathname) => {
 const worker = {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+    if (pathname === "/api/auth" || pathname.startsWith("/api/auth/")) return handleAuth(request, env, pathname);
     if (pathname === "/api/studio" || pathname.startsWith("/api/studio/")) return handleStudio(request, env, pathname);
     if (!env.ASSETS?.fetch) return json({ error: "Static assets binding missing." }, 500);
     return env.ASSETS.fetch(request);
