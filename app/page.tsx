@@ -624,23 +624,27 @@ export default function Home() {
 
   const clearReferences = () => setReferences(emptyReferences());
 
-  const resetGenerator = () => {
+  const resetGenerator = (nextMode: Mode = activeMode) => {
     generatorRunRef.current += 1;
     setGeneratorStatus("ready");
     setGeneratorMessage("Ready for a secure SHAZAN render.");
     setGeneratorVideoUrl("");
-    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" || activeMode === "voice" ? "audio" : "video");
+    setGeneratorOutputType(nextMode === "image" ? "image" : nextMode === "music" || nextMode === "voice" ? "audio" : "video");
     setGeneratorRequestId("");
   };
 
-  const changeModel = (value: string) => {
-    setModel(value);
+  const applyModelDefaults = (value: string) => {
     if (value === "GPT Voice") setVoicePreset("marin");
     else if (["ElevenLabs", "Multilingual Pro"].includes(value)) setVoicePreset("Rachel");
     else if (value === "Lyria 3") setMusicDuration(30);
     else if (value === "Gemini Omni Flash" || value === "Veo 3.1") setVideoDuration(8);
     else if (value === "Grok Imagine Video 1.5") setVideoDuration(6);
     else setVideoDuration(5);
+  };
+
+  const changeModel = (value: string) => {
+    setModel(value);
+    applyModelDefaults(value);
     clearReferences();
     resetGenerator();
   };
@@ -651,7 +655,7 @@ export default function Home() {
     if (mode === "voice") setVoicePreset("marin");
     clearReferences();
     setVideoGeneratorOpen(false);
-    resetGenerator();
+    resetGenerator(mode);
     setCreationReady(false);
   };
 
@@ -663,9 +667,14 @@ export default function Home() {
   };
 
   const chooseModel = (mode: Mode, value: string) => {
-    switchMode(mode);
+    setActiveMode(mode);
     setModel(value);
-    document.querySelector("#create")?.scrollIntoView({ behavior: "smooth" });
+    applyModelDefaults(value);
+    clearReferences();
+    resetGenerator(mode);
+    setCreationReady(false);
+    setMobileOpen(false);
+    setVideoGeneratorOpen(true);
   };
 
   const generate = () => {
@@ -1148,15 +1157,17 @@ export default function Home() {
           <div className="model-rail" id="models">
             {modelCatalog[activeMode].map((card) => (
               <button
+                type="button"
                 className="model-card"
                 key={card.name}
-                onClick={() => changeModel(card.name)}
+                onClick={() => chooseModel(activeMode, card.name)}
+                aria-label={`Open ${card.name} ${activeMode} generator`}
               >
                 <span className={`model-art ${card.art}`} />
                 <span className="model-info"><small>{card.maker}</small><b>{card.name}</b><em>{card.tag}</em></span>
               </button>
             ))}
-            <button className="rail-next" aria-label="See more models"><Icon name="chevron" size={22} /></button>
+            <button type="button" className="rail-next" aria-label="See all models" onClick={() => document.querySelector(".latest-models-section")?.scrollIntoView({ behavior: "smooth" })}><Icon name="chevron" size={22} /></button>
           </div>
         </div>
 
@@ -1294,7 +1305,7 @@ export default function Home() {
             </header>
             <div className="latest-card-grid">
               {modelCatalog.image.map((item) => (
-                <button key={item.name} onClick={() => chooseModel("image", item.name)}>
+                <button type="button" key={item.name} onClick={() => chooseModel("image", item.name)} aria-label={`Open ${item.name} image generator`}>
                   <span className={`latest-card-art ${item.art}`}><Icon name="image" size={22} /></span>
                   <span className="latest-card-copy"><small>{item.maker}</small><b>{item.name}</b><span className="model-feature-list">{item.features.map((feature) => <i key={feature}>{feature}</i>)}</span>{item.credits && <strong className="model-credit">{item.credits}</strong>}</span>
                   <em>{item.tag}</em><Icon name="arrow" size={17} />
@@ -1311,7 +1322,7 @@ export default function Home() {
             </header>
             <div className="latest-card-grid video-model-grid">
               {modelCatalog.video.map((item) => (
-                <button key={item.name} onClick={() => chooseModel("video", item.name)}>
+                <button type="button" key={item.name} onClick={() => chooseModel("video", item.name)} aria-label={`Open ${item.name} video generator`}>
                   <span className={`latest-card-art ${item.art}`}><Icon name="video" size={22} /></span>
                   <span className="latest-card-copy"><small>{item.maker}</small><b>{item.name}</b><span>{item.features.map((feature) => <i key={feature}>{feature}</i>)}</span></span>
                   <em>{item.tag}</em><Icon name="arrow" size={17} />
@@ -1466,7 +1477,7 @@ export default function Home() {
         </div>
         <div className="logo-river" aria-label="Available model families">
           {modelUniverse.map((item, index) => (
-            <button key={item.name} onClick={() => chooseModel(item.mode, item.name)}>
+            <button type="button" key={item.name} onClick={() => chooseModel(item.mode, item.name)} aria-label={`Open ${item.name} ${item.mode} generator`}>
               <span className={`logo-orb orb-${(index % 5) + 1}`}><Icon name={item.mode} size={19} /></span>
               {item.name}<Icon name="arrow" size={15} />
             </button>
