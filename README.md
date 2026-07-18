@@ -41,7 +41,7 @@ Add encrypted secrets under **Workers & Pages → ai-studio-1n1 → Settings →
 - `KIE_API_KEY` — optional fallback for models that are only connected through Kie
 - `AUTH_PEPPER` — random 32+ character password-hashing secret; keep it stable and encrypted
 
-Create a Cloudflare D1 database and add it to the Pages project under **Settings → Bindings** with the variable name `DB`. The Worker safely creates the required tables on first auth request; the versioned schema is also in `migrations/0001_auth.sql`.
+The production `DB` D1 and `MEDIA` R2 bindings are pinned in `wrangler.jsonc`; that file is the Pages configuration source of truth. The Worker safely creates the required auth tables on first request, and the versioned schema is also in `migrations/0001_auth.sql`.
 
 Never commit API keys, paste them into client code, or expose them through `NEXT_PUBLIC_` variables.
 
