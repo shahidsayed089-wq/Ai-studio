@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description:
     "A cinematic generative AI studio for image, video, music, voice, avatars and creative enhancement.",
   other: {
-    "shazan-api-bridge": "secure-auth-v1",
+    "shazan-api-bridge": "secure-auth-cpu-v3",
   },
   icons: {
     icon: "/favicon.svg",
