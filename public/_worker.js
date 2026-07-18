@@ -9,8 +9,7 @@ const AUTH_SESSION_SECONDS = 30 * 24 * 60 * 60;
 const AUTH_PBKDF2_ITERATIONS = 310000;
 
 const AUTH_SCHEMA_SQL = `
-PRAGMA foreign_keys = ON;
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS auth_users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,
   display_name TEXT NOT NULL,
@@ -24,18 +23,18 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at INTEGER NOT NULL,
   last_login_at INTEGER
 );
-CREATE INDEX IF NOT EXISTS users_status_idx ON users(status);
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE INDEX IF NOT EXISTS auth_users_status_idx ON auth_users(status);
+CREATE TABLE IF NOT EXISTS auth_sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token_hash);
-CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS auth_sessions_token_idx ON auth_sessions(token_hash);
+CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
 CREATE TABLE IF NOT EXISTS auth_attempts (
   scope_key TEXT PRIMARY KEY,
   attempt_count INTEGER NOT NULL,
@@ -634,7 +633,7 @@ const createSession = async (db, userId) => {
   const token = randomToken(32);
   const tokenHash = await sha256(token);
   const current = nowSeconds();
-  await db.prepare(`INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at)
+  await db.prepare(`INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at)
     VALUES (?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), userId, tokenHash, current + AUTH_SESSION_SECONDS, current, current).run();
   return token;
@@ -646,16 +645,16 @@ const getSession = async (request, db) => {
   const tokenHash = await sha256(token);
   const row = await db.prepare(`SELECT s.id AS session_id, s.expires_at, s.last_seen_at,
       u.id, u.email, u.display_name, u.role, u.status, u.credits
-    FROM sessions s JOIN users u ON u.id = s.user_id
+    FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id
     WHERE s.token_hash = ? LIMIT 1`).bind(tokenHash).first();
   if (!row) return null;
   const current = nowSeconds();
   if (Number(row.expires_at) <= current || row.status !== "active") {
-    await db.prepare("DELETE FROM sessions WHERE id = ?").bind(row.session_id).run();
+    await db.prepare("DELETE FROM auth_sessions WHERE id = ?").bind(row.session_id).run();
     return null;
   }
   if (current - Number(row.last_seen_at) > 60 * 60) {
-    await db.prepare("UPDATE sessions SET last_seen_at = ? WHERE id = ?").bind(current, row.session_id).run();
+    await db.prepare("UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?").bind(current, row.session_id).run();
   }
   return { row, tokenHash };
 };
@@ -678,7 +677,7 @@ const handleAuthRegister = async (request, db, pepper) => {
   if (retryAfter) return json({ error: "Too many registration attempts. Baad mein retry karein." }, 429, { "Retry-After": String(retryAfter) });
   await recordRateEvent(db, scopeKey, 5, 60 * 60);
 
-  const existing = await db.prepare("SELECT id FROM users WHERE email = ? LIMIT 1").bind(email).first();
+  const existing = await db.prepare("SELECT id FROM auth_users WHERE email = ? LIMIT 1").bind(email).first();
   if (existing) return json({ error: "Is email ka account already hai. Sign in karein." }, 409);
 
   const salt = randomToken(16);
@@ -686,7 +685,7 @@ const handleAuthRegister = async (request, db, pepper) => {
   const current = nowSeconds();
   const userId = crypto.randomUUID();
   try {
-    await db.prepare(`INSERT INTO users (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
+    await db.prepare(`INSERT INTO auth_users (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'user', 'active', 0, 0, ?, ?)`)
       .bind(userId, email, displayName, passwordHash, salt, current, current).run();
   } catch (error) {
@@ -713,7 +712,7 @@ const handleAuthLogin = async (request, db, pepper) => {
   if (retryAfter) return json({ error: "Too many login attempts. 15 minute baad retry karein." }, 429, { "Retry-After": String(retryAfter) });
 
   const user = await db.prepare(`SELECT id, email, display_name, password_hash, password_salt, role, status, credits
-    FROM users WHERE email = ? LIMIT 1`).bind(email).first();
+    FROM auth_users WHERE email = ? LIMIT 1`).bind(email).first();
   const candidateHash = user
     ? await hashPassword(password, user.password_salt, pepper)
     : await hashPassword(password, "not-a-real-user-salt", pepper);
@@ -724,7 +723,7 @@ const handleAuthLogin = async (request, db, pepper) => {
 
   await clearRateLimit(db, scopeKey);
   const current = nowSeconds();
-  await db.prepare("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?").bind(current, current, user.id).run();
+  await db.prepare("UPDATE auth_users SET last_login_at = ?, updated_at = ? WHERE id = ?").bind(current, current, user.id).run();
   const token = await createSession(db, user.id);
   return json({ authenticated: true, user: publicAuthUser(user) }, 200, { "Set-Cookie": sessionCookie(token) });
 };
@@ -739,14 +738,14 @@ const handleAuthLogout = async (request, db) => {
   const originError = sameOriginMutationError(request);
   if (originError) return originError;
   const token = parseCookies(request).get(AUTH_COOKIE);
-  if (token) await db.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await sha256(token)).run();
+  if (token) await db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
   return json({ authenticated: false, user: null }, 200, { "Set-Cookie": expiredSessionCookie() });
 };
 
 const handleAuth = async (request, env, pathname) => {
-  const runtime = await getAuthRuntime(env);
-  if (runtime.error) return runtime.error;
   try {
+    const runtime = await getAuthRuntime(env);
+    if (runtime.error) return runtime.error;
     if (pathname === "/api/auth/session" && request.method === "GET") return handleAuthSession(request, runtime.db);
     if (pathname === "/api/auth/register" && request.method === "POST") return handleAuthRegister(request, runtime.db, runtime.pepper);
     if (pathname === "/api/auth/login" && request.method === "POST") return handleAuthLogin(request, runtime.db, runtime.pepper);
