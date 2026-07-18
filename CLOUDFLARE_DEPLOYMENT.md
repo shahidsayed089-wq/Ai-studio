@@ -9,7 +9,16 @@ The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as 
 3. Build output directory: `out`
 4. Node.js: `22`
 
-`public/_worker.js` is copied to `out/_worker.js` and runs through Cloudflare Pages Advanced Mode. It handles only `/api/studio/*`; every other request is forwarded to static assets through `env.ASSETS`.
+`public/_worker.js` is copied to `out/_worker.js` and runs through Cloudflare Pages Advanced Mode. It handles `/api/studio/*` and `/api/auth/*`; every other request is forwarded to static assets through `env.ASSETS`.
+
+## D1 account database
+
+1. Open **Cloudflare Dashboard → Storage & databases → D1** and create a database, for example `shazan-ai-auth`.
+2. Open **Workers & Pages → ai-studio-1n1 → Settings → Bindings**.
+3. Add a **D1 database binding**, select that database and use the variable name exactly `DB`.
+4. Redeploy the latest `main` branch.
+
+The Worker runs idempotent `CREATE TABLE IF NOT EXISTS` statements on first use. The same schema is committed at `migrations/0001_auth.sql` for controlled migrations and backups.
 
 ## Required encrypted secrets
 
@@ -19,10 +28,16 @@ Open **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets*
 - `OPENAI_API_KEY`: private OpenAI token used by GPT Voice.
 - `STUDIO_ACCESS_CODE`: a long temporary owner-only generation code.
 - `KIE_API_KEY`: optional Kie fallback token for Seedance Mini and Kling Elements.
+- `AUTH_PEPPER`: a stable random secret of at least 32 characters for password hashing.
 
 Set every token and access code to **Secret**, not plain text. Never add tokens to GitHub, browser code, screenshots or chat.
 
 ## Routes
+
+- `POST /api/auth/register` — creates a D1 user and secure session.
+- `POST /api/auth/login` — verifies credentials with rate limiting.
+- `GET /api/auth/session` — restores a valid session.
+- `POST /api/auth/logout` — revokes the session.
 
 - `POST /api/studio/upload` — temporarily uploads a reference asset.
 - `POST /api/studio/generate` — validates the SHAZAN model key and creates an asynchronous task.
