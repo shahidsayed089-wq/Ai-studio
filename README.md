@@ -24,7 +24,7 @@ npm run build
 
 ## Deploy to Cloudflare Pages
 
-The production build generates the static website in `out`. Next.js also copies `public/_worker.js` to `out/_worker.js`; Cloudflare Pages runs it in Advanced Mode for the private `/api/studio/*` bridge.
+The production build generates the static website in `out`. Next.js also copies `public/_worker.js` to `out/_worker.js`; Cloudflare Pages runs it in Advanced Mode for the private `/api/studio/*` bridge and `/api/auth/*` account service.
 
 For the existing `ai-studio-1n1` project:
 
@@ -39,8 +39,24 @@ Add encrypted secrets under **Workers & Pages → ai-studio-1n1 → Settings →
 - `OPENAI_API_KEY` — private OpenAI Speech API token for GPT Voice
 - `STUDIO_ACCESS_CODE` — temporary owner gate until user wallets are ready
 - `KIE_API_KEY` — optional fallback for models that are only connected through Kie
+- `AUTH_PEPPER` — random 32+ character password-hashing secret; keep it stable and encrypted
+
+Create a Cloudflare D1 database and add it to the Pages project under **Settings → Bindings** with the variable name `DB`. The Worker safely creates the required tables on first auth request; the versioned schema is also in `migrations/0001_auth.sql`.
 
 Never commit API keys, paste them into client code, or expose them through `NEXT_PUBLIC_` variables.
+
+## Secure accounts
+
+SHAZAN login/register uses D1-backed users, PBKDF2-SHA256 password hashing with a private pepper, opaque server sessions, hashed session tokens and a `Secure`, `HttpOnly`, `SameSite=Lax` cookie. Login attempts are rate-limited and authentication errors do not disclose whether an account exists.
+
+Routes:
+
+- `POST /api/auth/register` — validates name, email and a strong 12+ character password, then creates a session.
+- `POST /api/auth/login` — verifies the password and creates a fresh 30-day session.
+- `GET /api/auth/session` — restores the signed-in user without exposing secrets.
+- `POST /api/auth/logout` — revokes the stored session and clears the cookie.
+
+New accounts start with `0` credits. Paid generation remains owner-gated until credit purchase and atomic debit logic are connected.
 
 ## Connected models
 
@@ -66,4 +82,4 @@ GPT Voice uses OpenAI's request-based Speech API because the current UI generate
 
 ## Public-launch safety
 
-Paid generation is owner-gated by default. Do not set `STUDIO_ALLOW_PUBLIC=true` until SHAZAN authentication, a per-user credit wallet, quotas and abuse controls are live.
+Paid generation is owner-gated by default. Do not set `STUDIO_ALLOW_PUBLIC=true` until the per-user credit purchase, atomic debit, quotas and abuse controls are live.
