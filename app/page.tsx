@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 
 type Mode = "image" | "video" | "music" | "voice" | "avatar";
 type ReferenceKind = "images" | "videos" | "audio";
@@ -19,6 +20,14 @@ type VideoInputProfile = {
   slots: VideoInputSlot[];
 };
 type GeneratorStatus = "ready" | "uploading" | "queued" | "processing" | "completed" | "failed";
+type AuthView = "login" | "register";
+type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  credits: number;
+};
 type IconName =
   | Mode
   | "sparkle"
@@ -488,8 +497,37 @@ export default function Home() {
   const [videoDuration, setVideoDuration] = useState(5);
   const [musicDuration, setMusicDuration] = useState(30);
   const [voicePreset, setVoicePreset] = useState("marin");
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authView, setAuthView] = useState<AuthView>("login");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirm, setAuthConfirm] = useState("");
+  const [accountOpen, setAccountOpen] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const generatorRunRef = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!active) return;
+        const record = payload as { authenticated?: boolean; user?: AuthUser };
+        setAuthUser(response.ok && record.authenticated && record.user ? record.user : null);
+      })
+      .catch(() => {
+        if (active) setAuthUser(null);
+      })
+      .finally(() => {
+        if (active) setAuthLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const currentMode = useMemo(
     () => modes.find((item) => item.id === activeMode) ?? modes[0],
@@ -806,6 +844,64 @@ export default function Home() {
     }
   };
 
+  const openAuth = (view: AuthView) => {
+    setAuthView(view);
+    setAuthError("");
+    setAuthPassword("");
+    setAuthConfirm("");
+    setAuthOpen(true);
+    setMobileOpen(false);
+    setAccountOpen(false);
+  };
+
+  const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (authView === "register" && authPassword !== authConfirm) {
+      setAuthError("Dono passwords match nahi karte.");
+      return;
+    }
+    setAuthSubmitting(true);
+    setAuthError("");
+    try {
+      const response = await fetch(`/api/auth/${authView}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(authView === "register"
+          ? { name: authName, email: authEmail, password: authPassword }
+          : { email: authEmail, password: authPassword }),
+      });
+      const payload = await response.json().catch(() => ({})) as { authenticated?: boolean; user?: AuthUser; error?: string; message?: string };
+      if (!response.ok || !payload.authenticated || !payload.user) {
+        throw new Error(payload.message || payload.error || "Account request complete nahi hui.");
+      }
+      setAuthUser(payload.user);
+      setAuthPassword("");
+      setAuthConfirm("");
+      setAuthOpen(false);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Account service unavailable hai.");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const logout = async () => {
+    setAccountOpen(false);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+    } finally {
+      setAuthUser(null);
+    }
+  };
+
+  const passwordRules = {
+    length: authPassword.length >= 12,
+    mixed: /[a-z]/.test(authPassword) && /[A-Z]/.test(authPassword),
+    number: /[0-9]/.test(authPassword),
+    symbol: /[^A-Za-z0-9]/.test(authPassword),
+  };
+
   return (
     <main>
       <header className="site-header">
@@ -823,18 +919,102 @@ export default function Home() {
           <a href="#pricing" onClick={() => setMobileOpen(false)}>Pricing</a>
         </nav>
 
-        <button className="header-cta" onClick={() => goToCreate()}>
-          <Icon name="sparkle" size={17} /> Start creating
-        </button>
-        <button
-          className="menu-button"
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen((value) => !value)}
-        >
-          <Icon name={mobileOpen ? "close" : "menu"} size={23} />
-        </button>
+        <div className="header-actions">
+          {authUser ? (
+            <div className="account-shell">
+              <button className="account-pill" onClick={() => setAccountOpen((value) => !value)} aria-expanded={accountOpen}>
+                <span>{authUser.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
+                <b>{authUser.name.split(" ")[0]}</b>
+                <Icon name="chevron" size={15} />
+              </button>
+              {accountOpen && (
+                <div className="account-menu">
+                  <small>SHAZAN ACCOUNT</small>
+                  <b>{authUser.name}</b>
+                  <span>{authUser.email}</span>
+                  <div><span>Available credits</span><strong>{authUser.credits}</strong></div>
+                  <button onClick={logout}>Sign out <Icon name="arrow" size={15} /></button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button className="auth-trigger" onClick={() => openAuth("login")} disabled={authLoading}>
+              {authLoading ? "Account" : "Sign in"}
+            </button>
+          )}
+          <button className="header-cta" onClick={() => goToCreate()}>
+            <Icon name="sparkle" size={17} /> Start creating
+          </button>
+          <button
+            className="menu-button"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((value) => !value)}
+          >
+            <Icon name={mobileOpen ? "close" : "menu"} size={23} />
+          </button>
+        </div>
       </header>
+
+      {authOpen && (
+        <div className="auth-overlay" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setAuthOpen(false); }}>
+          <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+            <aside className="auth-visual">
+              <span className="auth-visual-mark"><Icon name="sparkle" size={22} /></span>
+              <div>
+                <small>PRIVATE CREATIVE IDENTITY</small>
+                <h2>Your worlds.<br /><em>Safely yours.</em></h2>
+                <p>One secure SHAZAN account for projects, credits and every generation.</p>
+              </div>
+              <ul>
+                <li><Icon name="check" size={16} /> Secure HttpOnly session</li>
+                <li><Icon name="check" size={16} /> Strong password protection</li>
+                <li><Icon name="check" size={16} /> Credits linked to your account</li>
+              </ul>
+            </aside>
+
+            <div className="auth-form-panel">
+              <button className="auth-close" onClick={() => setAuthOpen(false)} aria-label="Close account window"><Icon name="close" size={20} /></button>
+              <span className="auth-eyebrow">SHAZAN AI ACCESS</span>
+              <h2 id="auth-title">{authView === "login" ? "Welcome back." : "Create your account."}</h2>
+              <p>{authView === "login" ? "Sign in to continue your creative universe." : "Set up your secure identity for projects and credits."}</p>
+
+              <div className="auth-tabs" role="tablist" aria-label="Account action">
+                <button className={authView === "login" ? "active" : ""} onClick={() => { setAuthView("login"); setAuthError(""); }} role="tab" aria-selected={authView === "login"}>Sign in</button>
+                <button className={authView === "register" ? "active" : ""} onClick={() => { setAuthView("register"); setAuthError(""); }} role="tab" aria-selected={authView === "register"}>Register</button>
+              </div>
+
+              <form onSubmit={submitAuth}>
+                {authView === "register" && (
+                  <label><span>Full name</span><input value={authName} onChange={(event) => setAuthName(event.target.value)} autoComplete="name" maxLength={40} required placeholder="Your name" /></label>
+                )}
+                <label><span>Email address</span><input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} autoComplete="email" maxLength={254} required placeholder="you@example.com" /></label>
+                <label><span>Password</span><input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} autoComplete={authView === "register" ? "new-password" : "current-password"} minLength={authView === "register" ? 12 : undefined} maxLength={128} required placeholder={authView === "register" ? "Minimum 12 characters" : "Enter your password"} /></label>
+                {authView === "register" && (
+                  <>
+                    <label><span>Confirm password</span><input type="password" value={authConfirm} onChange={(event) => setAuthConfirm(event.target.value)} autoComplete="new-password" minLength={12} maxLength={128} required placeholder="Repeat your password" /></label>
+                    <div className="password-rules" aria-label="Password requirements">
+                      <span className={passwordRules.length ? "valid" : ""}><i /> 12+ characters</span>
+                      <span className={passwordRules.mixed ? "valid" : ""}><i /> Upper + lowercase</span>
+                      <span className={passwordRules.number ? "valid" : ""}><i /> Number</span>
+                      <span className={passwordRules.symbol ? "valid" : ""}><i /> Symbol</span>
+                    </div>
+                  </>
+                )}
+                {authError && <div className="auth-error" role="alert"><Icon name="sliders" size={17} /><span>{authError}</span></div>}
+                <button className="auth-submit" disabled={authSubmitting} type="submit">
+                  {authSubmitting ? <span className="loader" /> : <Icon name="sparkle" size={18} />}
+                  {authSubmitting ? "Please wait…" : authView === "login" ? "Secure sign in" : "Create account"}
+                </button>
+              </form>
+              <small className="auth-security-note">Passwords raw form mein store nahi hote. Secure hashing aur private server session use hota hai.</small>
+              <button className="auth-switch" onClick={() => { setAuthView(authView === "login" ? "register" : "login"); setAuthError(""); }}>
+                {authView === "login" ? "New to SHAZAN? Create an account" : "Already registered? Sign in"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="hero" id="create">
         <div className="hero-art" aria-hidden="true" />
