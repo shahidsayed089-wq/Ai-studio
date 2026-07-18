@@ -13,10 +13,12 @@ The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as 
 
 ## D1 account database
 
-1. Open **Cloudflare Dashboard → Storage & databases → D1** and create a database, for example `shazan-ai-auth`.
-2. Open **Workers & Pages → ai-studio-1n1 → Settings → Bindings**.
-3. Add a **D1 database binding**, select that database and use the variable name exactly `DB`.
-4. Redeploy the latest `main` branch.
+Production bindings are committed in `wrangler.jsonc`, which is the source of truth for this Pages project:
+
+- `DB` → D1 database `ai-studio-wallet`
+- `MEDIA` → R2 bucket `ai-studio-media`
+
+Cloudflare therefore shows these production binding controls as read-only in the dashboard. Change the repository config rather than creating a duplicate dashboard binding, then redeploy the latest `main` branch.
 
 The Worker runs idempotent `CREATE TABLE IF NOT EXISTS` statements on first use. The same schema is committed at `migrations/0001_auth.sql` for controlled migrations and backups.
 
