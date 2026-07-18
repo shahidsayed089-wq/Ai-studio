@@ -1207,6 +1207,20 @@ a {
   transform: translateY(-3px);
 }
 
+.model-card:active,
+.latest-card-grid > button:active,
+.logo-river button:active {
+  border-color: rgba(255, 211, 129, 0.72);
+  transform: scale(0.985);
+}
+
+.model-card:focus-visible,
+.latest-card-grid > button:focus-visible,
+.logo-river button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
 .latest-card-grid > button > svg { color: rgba(255, 255, 255, 0.3); }
 .latest-card-grid > button:hover > svg { color: var(--gold); }
 
