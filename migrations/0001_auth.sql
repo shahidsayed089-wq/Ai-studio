@@ -1,6 +1,4 @@
-PRAGMA foreign_keys = ON;
-
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS auth_users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,
   display_name TEXT NOT NULL,
@@ -15,20 +13,20 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at INTEGER
 );
 
-CREATE INDEX IF NOT EXISTS users_status_idx ON users(status);
+CREATE INDEX IF NOT EXISTS auth_users_status_idx ON auth_users(status);
 
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS auth_sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token_hash);
-CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS auth_sessions_token_idx ON auth_sessions(token_hash);
+CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
 
 CREATE TABLE IF NOT EXISTS auth_attempts (
   scope_key TEXT PRIMARY KEY,
