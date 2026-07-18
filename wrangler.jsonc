@@ -3,5 +3,18 @@
   "name": "ai-studio-1n1",
   "pages_build_output_dir": "./out",
   "compatibility_date": "2026-07-17",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-studio-wallet",
+      "database_id": "6c50fd4a-b267-40ac-99dc-c0c47be64e18"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "ai-studio-media"
+    }
+  ]
 }
