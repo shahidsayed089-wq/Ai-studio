@@ -8,8 +8,7 @@ const AUTH_COOKIE = "__Host-shazan_session";
 const AUTH_SESSION_SECONDS = 30 * 24 * 60 * 60;
 const AUTH_PBKDF2_ITERATIONS = 310000;
 
-const AUTH_SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS auth_users (
+const AUTH_SCHEMA_STATEMENTS = [`CREATE TABLE IF NOT EXISTS shazan_auth_users_v1 (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL COLLATE NOCASE UNIQUE,
   display_name TEXT NOT NULL,
@@ -22,26 +21,20 @@ CREATE TABLE IF NOT EXISTS auth_users (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   last_login_at INTEGER
-);
-CREATE INDEX IF NOT EXISTS auth_users_status_idx ON auth_users(status);
-CREATE TABLE IF NOT EXISTS auth_sessions (
+);`, `CREATE TABLE IF NOT EXISTS shazan_auth_sessions_v1 (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS auth_sessions_token_idx ON auth_sessions(token_hash);
-CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
-CREATE TABLE IF NOT EXISTS auth_attempts (
+  FOREIGN KEY (user_id) REFERENCES shazan_auth_users_v1(id) ON DELETE CASCADE
+);`, `CREATE TABLE IF NOT EXISTS shazan_auth_attempts_v1 (
   scope_key TEXT PRIMARY KEY,
   attempt_count INTEGER NOT NULL,
   window_started_at INTEGER NOT NULL,
   blocked_until INTEGER NOT NULL DEFAULT 0
-);
-`;
+);`];
 
 const KIE_MARKET_MODELS = {
   seedance_2_0_standard: "bytedance/seedance-2",
@@ -515,12 +508,12 @@ const hashPassword = async (password, salt, pepper) => {
 
 const ensureAuthSchema = async (db) => {
   if (authSchemaReady.has(db)) return;
-  await db.exec(AUTH_SCHEMA_SQL);
+  for (const statement of AUTH_SCHEMA_STATEMENTS) await db.prepare(statement).run();
   authSchemaReady.add(db);
 };
 
 const getAuthRuntime = async (env) => {
-  if (!env.DB || typeof env.DB.prepare !== "function" || typeof env.DB.exec !== "function") {
+  if (!env.DB || typeof env.DB.prepare !== "function") {
     return { error: json({
       error: "Account database setup pending",
       message: "Cloudflare D1 database ko DB binding naam se connect karke deployment retry karein.",
@@ -595,11 +588,11 @@ const rateLimitKey = async (scope, request, pepper, identity = "") => sha256(`${
 
 const getRateLimit = async (db, scopeKey, limit, windowSeconds) => {
   const current = nowSeconds();
-  const row = await db.prepare("SELECT attempt_count, window_started_at, blocked_until FROM auth_attempts WHERE scope_key = ? LIMIT 1").bind(scopeKey).first();
+  const row = await db.prepare("SELECT attempt_count, window_started_at, blocked_until FROM shazan_auth_attempts_v1 WHERE scope_key = ? LIMIT 1").bind(scopeKey).first();
   if (!row) return null;
   if (Number(row.blocked_until) > current) return Math.max(1, Number(row.blocked_until) - current);
   if (current - Number(row.window_started_at) >= windowSeconds) {
-    await db.prepare("DELETE FROM auth_attempts WHERE scope_key = ?").bind(scopeKey).run();
+    await db.prepare("DELETE FROM shazan_auth_attempts_v1 WHERE scope_key = ?").bind(scopeKey).run();
     return null;
   }
   if (Number(row.attempt_count) >= limit) return Math.max(1, windowSeconds - (current - Number(row.window_started_at)));
@@ -608,18 +601,18 @@ const getRateLimit = async (db, scopeKey, limit, windowSeconds) => {
 
 const recordRateEvent = async (db, scopeKey, limit, windowSeconds) => {
   const current = nowSeconds();
-  const row = await db.prepare("SELECT attempt_count, window_started_at FROM auth_attempts WHERE scope_key = ? LIMIT 1").bind(scopeKey).first();
+  const row = await db.prepare("SELECT attempt_count, window_started_at FROM shazan_auth_attempts_v1 WHERE scope_key = ? LIMIT 1").bind(scopeKey).first();
   const expired = !row || current - Number(row.window_started_at) >= windowSeconds;
   const count = expired ? 1 : Number(row.attempt_count) + 1;
   const windowStarted = expired ? current : Number(row.window_started_at);
   const blockedUntil = count >= limit ? windowStarted + windowSeconds : 0;
-  await db.prepare(`INSERT INTO auth_attempts (scope_key, attempt_count, window_started_at, blocked_until)
+  await db.prepare(`INSERT INTO shazan_auth_attempts_v1 (scope_key, attempt_count, window_started_at, blocked_until)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(scope_key) DO UPDATE SET attempt_count = excluded.attempt_count, window_started_at = excluded.window_started_at, blocked_until = excluded.blocked_until`)
     .bind(scopeKey, count, windowStarted, blockedUntil).run();
 };
 
-const clearRateLimit = (db, scopeKey) => db.prepare("DELETE FROM auth_attempts WHERE scope_key = ?").bind(scopeKey).run();
+const clearRateLimit = (db, scopeKey) => db.prepare("DELETE FROM shazan_auth_attempts_v1 WHERE scope_key = ?").bind(scopeKey).run();
 
 const publicAuthUser = (row) => ({
   id: row.id,
@@ -633,7 +626,7 @@ const createSession = async (db, userId) => {
   const token = randomToken(32);
   const tokenHash = await sha256(token);
   const current = nowSeconds();
-  await db.prepare(`INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at)
+  await db.prepare(`INSERT INTO shazan_auth_sessions_v1 (id, user_id, token_hash, expires_at, created_at, last_seen_at)
     VALUES (?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), userId, tokenHash, current + AUTH_SESSION_SECONDS, current, current).run();
   return token;
@@ -645,16 +638,16 @@ const getSession = async (request, db) => {
   const tokenHash = await sha256(token);
   const row = await db.prepare(`SELECT s.id AS session_id, s.expires_at, s.last_seen_at,
       u.id, u.email, u.display_name, u.role, u.status, u.credits
-    FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id
+    FROM shazan_auth_sessions_v1 s JOIN shazan_auth_users_v1 u ON u.id = s.user_id
     WHERE s.token_hash = ? LIMIT 1`).bind(tokenHash).first();
   if (!row) return null;
   const current = nowSeconds();
   if (Number(row.expires_at) <= current || row.status !== "active") {
-    await db.prepare("DELETE FROM auth_sessions WHERE id = ?").bind(row.session_id).run();
+    await db.prepare("DELETE FROM shazan_auth_sessions_v1 WHERE id = ?").bind(row.session_id).run();
     return null;
   }
   if (current - Number(row.last_seen_at) > 60 * 60) {
-    await db.prepare("UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?").bind(current, row.session_id).run();
+    await db.prepare("UPDATE shazan_auth_sessions_v1 SET last_seen_at = ? WHERE id = ?").bind(current, row.session_id).run();
   }
   return { row, tokenHash };
 };
@@ -677,7 +670,7 @@ const handleAuthRegister = async (request, db, pepper) => {
   if (retryAfter) return json({ error: "Too many registration attempts. Baad mein retry karein." }, 429, { "Retry-After": String(retryAfter) });
   await recordRateEvent(db, scopeKey, 5, 60 * 60);
 
-  const existing = await db.prepare("SELECT id FROM auth_users WHERE email = ? LIMIT 1").bind(email).first();
+  const existing = await db.prepare("SELECT id FROM shazan_auth_users_v1 WHERE email = ? LIMIT 1").bind(email).first();
   if (existing) return json({ error: "Is email ka account already hai. Sign in karein." }, 409);
 
   const salt = randomToken(16);
@@ -685,7 +678,7 @@ const handleAuthRegister = async (request, db, pepper) => {
   const current = nowSeconds();
   const userId = crypto.randomUUID();
   try {
-    await db.prepare(`INSERT INTO auth_users (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
+    await db.prepare(`INSERT INTO shazan_auth_users_v1 (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'user', 'active', 0, 0, ?, ?)`)
       .bind(userId, email, displayName, passwordHash, salt, current, current).run();
   } catch (error) {
@@ -712,7 +705,7 @@ const handleAuthLogin = async (request, db, pepper) => {
   if (retryAfter) return json({ error: "Too many login attempts. 15 minute baad retry karein." }, 429, { "Retry-After": String(retryAfter) });
 
   const user = await db.prepare(`SELECT id, email, display_name, password_hash, password_salt, role, status, credits
-    FROM auth_users WHERE email = ? LIMIT 1`).bind(email).first();
+    FROM shazan_auth_users_v1 WHERE email = ? LIMIT 1`).bind(email).first();
   const candidateHash = user
     ? await hashPassword(password, user.password_salt, pepper)
     : await hashPassword(password, "not-a-real-user-salt", pepper);
@@ -723,7 +716,7 @@ const handleAuthLogin = async (request, db, pepper) => {
 
   await clearRateLimit(db, scopeKey);
   const current = nowSeconds();
-  await db.prepare("UPDATE auth_users SET last_login_at = ?, updated_at = ? WHERE id = ?").bind(current, current, user.id).run();
+  await db.prepare("UPDATE shazan_auth_users_v1 SET last_login_at = ?, updated_at = ? WHERE id = ?").bind(current, current, user.id).run();
   const token = await createSession(db, user.id);
   return json({ authenticated: true, user: publicAuthUser(user) }, 200, { "Set-Cookie": sessionCookie(token) });
 };
@@ -738,7 +731,7 @@ const handleAuthLogout = async (request, db) => {
   const originError = sameOriginMutationError(request);
   if (originError) return originError;
   const token = parseCookies(request).get(AUTH_COOKIE);
-  if (token) await db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
+  if (token) await db.prepare("DELETE FROM shazan_auth_sessions_v1 WHERE token_hash = ?").bind(await sha256(token)).run();
   return json({ authenticated: false, user: null }, 200, { "Set-Cookie": expiredSessionCookie() });
 };
 
