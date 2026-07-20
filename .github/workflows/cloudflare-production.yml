@@ -29,7 +29,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      XDG_CONFIG_HOME: ${{ runner.temp }}/xdg
+      XDG_CONFIG_HOME: /tmp/shazan-cloudflare-xdg
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
