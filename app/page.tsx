@@ -28,6 +28,12 @@ type AuthUser = {
   role: "user" | "creator" | "admin";
   credits: number;
 };
+
+const safeReturnTo = (value: string) => {
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "";
+  const pathname = value.split(/[?#]/, 1)[0];
+  return ["/studio", "/projects", "/assets", "/advanced/canvas", "/admin"].some((route) => pathname === route || pathname.startsWith(`${route}/`)) ? value : "";
+};
 type IconName =
   | Mode
   | "sparkle"
@@ -49,9 +55,9 @@ type IconName =
 const modes: { id: Mode; label: string; placeholder: string }[] = [
   { id: "image", label: "Image", placeholder: "Describe the world you want to create..." },
   { id: "video", label: "Video", placeholder: "Describe a scene, camera move, mood and action..." },
-  { id: "music", label: "Music", placeholder: "Describe the sound, emotion, voice and energy..." },
+  { id: "music", label: "Audio", placeholder: "Describe the sound, emotion, voice and energy..." },
   { id: "voice", label: "Voice", placeholder: "Write what your cinematic voice should say..." },
-  { id: "avatar", label: "Avatar", placeholder: "Describe your presenter, performance and setting..." },
+  { id: "avatar", label: "Character", placeholder: "Describe your presenter, performance and setting..." },
 ];
 
 const modelMap: Record<Mode, string[]> = {
@@ -490,8 +496,8 @@ export default function Home() {
   const [generatorStatus, setGeneratorStatus] = useState<GeneratorStatus>("ready");
   const [generatorMessage, setGeneratorMessage] = useState("Ready for a secure SHAZAN render.");
   const [generatorVideoUrl, setGeneratorVideoUrl] = useState("");
-  const [generatorOutputType, setGeneratorOutputType] = useState<"image" | "video" | "audio">("video");
-  const [generatorRequestId, setGeneratorRequestId] = useState("");
+  const [generatorOutputType, setGeneratorOutputType] = useState<"image" | "video" | "audio" | "file">("video");
+  const [, setGeneratorRequestId] = useState("");
   const [videoAspectRatio, setVideoAspectRatio] = useState("16:9");
   const [videoResolution, setVideoResolution] = useState("720p");
   const [videoDuration, setVideoDuration] = useState(5);
@@ -507,6 +513,7 @@ export default function Home() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirm, setAuthConfirm] = useState("");
+  const [authReturnTo, setAuthReturnTo] = useState("/studio");
   const [accountOpen, setAccountOpen] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const generatorRunRef = useRef(0);
@@ -516,13 +523,26 @@ export default function Home() {
     const parameters = new URLSearchParams(window.location.search);
     const requestedAuth = parameters.get("auth");
     const requestedNext = parameters.get("next") || "";
-    authNextRef.current = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "";
-    if (requestedAuth === "login" || requestedAuth === "register") {
-      window.setTimeout(() => {
+    const safeNext = safeReturnTo(requestedNext);
+    authNextRef.current = safeNext;
+    const requestedMode = parameters.get("mode") as Mode | null;
+    const requestedModel = (parameters.get("model") || "").slice(0, 120);
+    const requestedPrompt = (parameters.get("prompt") || "").slice(0, 5000);
+    const queryTimer = window.setTimeout(() => {
+      setAuthReturnTo(safeNext || "/studio");
+      if (requestedMode && modes.some((item) => item.id === requestedMode)) {
+        setActiveMode(requestedMode);
+        setModel(modelMap[requestedMode].includes(requestedModel) ? requestedModel : modelMap[requestedMode][0]);
+        if (requestedPrompt) {
+          setPrompt(requestedPrompt);
+          setVideoGeneratorOpen(true);
+        }
+      }
+      if (requestedAuth === "login" || requestedAuth === "register") {
         setAuthView(requestedAuth);
         setAuthOpen(true);
-      }, 0);
-    }
+      }
+    }, 0);
     let active = true;
     void fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" })
       .then(async (response) => {
@@ -537,7 +557,7 @@ export default function Home() {
       .finally(() => {
         if (active) setAuthLoading(false);
       });
-    return () => { active = false; };
+    return () => { active = false; window.clearTimeout(queryTimer); };
   }, []);
 
   const currentMode = useMemo(
@@ -641,7 +661,6 @@ export default function Home() {
     setGeneratorMessage("Ready for a secure SHAZAN render.");
     setGeneratorVideoUrl("");
     setGeneratorOutputType(nextMode === "image" ? "image" : nextMode === "music" || nextMode === "voice" ? "audio" : "video");
-    setGeneratorRequestId("");
   };
 
   const applyModelDefaults = (value: string) => {
@@ -716,14 +735,91 @@ export default function Home() {
     const studioUrl = `/studio?mode=${encodeURIComponent(activeMode)}&model=${encodeURIComponent(model)}&prompt=${encodeURIComponent(cleanPrompt)}`;
     if (!authUser) {
       authNextRef.current = studioUrl;
+      setAuthReturnTo(studioUrl);
       openAuth("login");
-      setGeneratorMessage("Credit-protected workflow ke liye pehle sign in karein.");
+      setGeneratorMessage("Credit-protected creation ke liye pehle sign in karein.");
       return;
     }
-    setGeneratorStatus("queued");
-    setGeneratorMessage("SHAZAN Workflow Studio open ho raha hai—credits wahin atomically reserve honge.");
-    window.location.assign(studioUrl);
-    if (window.location.href) return;
+    if (window.location.pathname !== "/studio" && window.location.pathname !== "/studio/") {
+      setGeneratorStatus("queued");
+      setGeneratorMessage("SHAZAN Studio open ho raha hai…");
+      window.location.assign(studioUrl);
+      return;
+    }
+
+    const quickRunId = generatorRunRef.current + 1;
+    generatorRunRef.current = quickRunId;
+    setGeneratorVideoUrl("");
+    setGeneratorOutputType(activeMode === "image" ? "image" : activeMode === "music" || activeMode === "voice" ? "audio" : "video");
+    setGeneratorRequestId("");
+
+    try {
+      const allReferences = [...references.images, ...references.videos, ...references.audio];
+      if (allReferences.length) {
+        setGeneratorStatus("uploading");
+        setGeneratorMessage(`${allReferences.length} reference file${allReferences.length === 1 ? "" : "s"} secure storage mein upload ho rahe hain…`);
+      } else {
+        setGeneratorStatus("queued");
+        setGeneratorMessage("Creation securely prepare ho rahi hai…");
+      }
+      const referenceAssetIds = await Promise.all(allReferences.map(async (file) => {
+        const response = await fetch("/api/v1/assets", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": file.name },
+          body: file,
+        });
+        const payload = await response.json().catch(() => ({})) as { asset?: { id?: string }; message?: string; error?: string };
+        if (!response.ok || !payload.asset?.id) throw new Error(payload.message || payload.error || `Upload failed (${response.status})`);
+        return payload.asset.id;
+      }));
+      if (generatorRunRef.current !== quickRunId) return;
+
+      const idempotencyKey = `creation:${crypto.randomUUID()}`;
+      const response = await fetch("/api/v1/creations", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({
+          mode: activeMode,
+          model: getApiModelKey(model),
+          prompt: cleanPrompt,
+          aspect_ratio: activeMode === "avatar" ? "source" : videoAspectRatio,
+          resolution: videoResolution,
+          duration: activeMode === "music" ? musicDuration : videoDuration,
+          reference_asset_ids: referenceAssetIds,
+        }),
+      });
+      let payload = await response.json().catch(() => ({})) as { job?: { id?: string; status?: string; progress?: number; result_url?: string; error?: string }; message?: string; error?: string };
+      if (!response.ok || !payload.job?.id) throw new Error(payload.message || payload.error || `Generation failed (${response.status})`);
+      setGeneratorStatus("queued");
+      setGeneratorMessage("Demo creation queue mein hai…");
+
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        if (generatorRunRef.current !== quickRunId) return;
+        const job = payload.job;
+        if (job?.status === "completed" && job.result_url) {
+          setGeneratorVideoUrl(job.result_url);
+          setGeneratorOutputType("file");
+          setGeneratorStatus("completed");
+          setGeneratorMessage("Demo creation ready hai — preview proof aur download available hai.");
+          return;
+        }
+        if (job?.status === "failed" || job?.status === "cancelled") throw new Error(job.error || (job.status === "failed" ? "Creation permanently failed; reserved credits refunded." : "Creation cancelled; reserved credits refunded."));
+        setGeneratorStatus(job?.status === "processing" ? "processing" : "queued");
+        setGeneratorMessage(job?.status === "processing" ? `SHAZAN Demo create kar raha hai… ${Math.max(0, Math.min(99, Number(job.progress) || 0))}%` : "Demo creation queue mein hai…");
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        const statusResponse = await fetch(`/api/v1/jobs/${encodeURIComponent(job!.id!)}`, { cache: "no-store", credentials: "same-origin" });
+        payload = await statusResponse.json().catch(() => ({}));
+        if (!statusResponse.ok) throw new Error(payload.message || payload.error || `Status check failed (${statusResponse.status})`);
+      }
+      throw new Error("Creation process ho rahi hai. My Creations mein progress continue rahegi.");
+    } catch (error) {
+      if (generatorRunRef.current !== quickRunId) return;
+      setGeneratorStatus("failed");
+      setGeneratorMessage(error instanceof Error ? (error as Error).message : "Generation start nahi ho saki.");
+    }
+    return;
 
     if (model.startsWith("Seedance 2.0") && references.audio.length > 0 && references.images.length + references.videos.length === 0) {
       setGeneratorStatus("failed");
@@ -843,11 +939,11 @@ export default function Home() {
       for (let attempt = 0; attempt < 120; attempt += 1) {
         const status = typeof responseRecord.status === "string" ? String(responseRecord.status).toLowerCase() : "queued";
         const media = extractMedia(payload);
-        if (status === "completed" && media) {
-          setGeneratorVideoUrl(media.url);
-          setGeneratorOutputType(media.type);
+        if (status === "completed" && media !== null) {
+          setGeneratorVideoUrl(media!.url);
+          setGeneratorOutputType(media!.type);
           setGeneratorStatus("completed");
-          setGeneratorMessage(`${media.type === "image" ? "Image" : media.type === "audio" ? "Audio" : "Video"} ready hai — preview ya download kar sakte hain.`);
+          setGeneratorMessage(`${media!.type === "image" ? "Image" : media!.type === "audio" ? "Audio" : "Video"} ready hai — preview ya download kar sakte hain.`);
           return;
         }
         if (["failed", "nsfw", "canceled", "cancelled"].includes(status)) {
@@ -872,7 +968,7 @@ export default function Home() {
     } catch (error) {
       if (generatorRunRef.current !== runId) return;
       setGeneratorStatus("failed");
-      setGeneratorMessage(error instanceof Error ? error.message : "Generation start nahi ho saki.");
+      setGeneratorMessage(error instanceof Error ? (error as Error).message : "Generation start nahi ho saki.");
     }
   };
 
@@ -913,7 +1009,7 @@ export default function Home() {
       setAuthPassword("");
       setAuthConfirm("");
       setAuthOpen(false);
-      if (authNextRef.current) window.location.assign(authNextRef.current);
+      window.location.assign(authNextRef.current || "/studio");
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Account service unavailable hai.");
     } finally {
@@ -968,7 +1064,11 @@ export default function Home() {
                   <b>{authUser.name}</b>
                   <span>{authUser.email}</span>
                   <div><span>Available credits</span><strong>{authUser.credits}</strong></div>
-                  <a className="account-studio-link" href="/studio">Open Workflow Studio <Icon name="arrow" size={15} /></a>
+                  <a className="account-studio-link" href="/studio">Open Studio <Icon name="arrow" size={15} /></a>
+                  <a className="account-studio-link" href="/projects">My Projects <Icon name="arrow" size={15} /></a>
+                  <a className="account-studio-link" href="/assets">My Creations <Icon name="arrow" size={15} /></a>
+                  <small>ADVANCED TOOLS</small>
+                  <a className="account-studio-link" href="/advanced/canvas">Pro Canvas — Advanced <Icon name="arrow" size={15} /></a>
                   {authUser.role === "admin" && <a className="account-admin-link" href="/admin">Admin dashboard <Icon name="sliders" size={15} /></a>}
                   <button onClick={logout}>Sign out <Icon name="arrow" size={15} /></button>
                 </div>
@@ -1021,7 +1121,7 @@ export default function Home() {
                 <button className={authView === "register" ? "active" : ""} onClick={() => { setAuthView("register"); setAuthError(""); }} role="tab" aria-selected={authView === "register"}>Register</button>
               </div>
 
-              <a className="google-auth-button" href="/api/auth/google/start">
+              <a className="google-auth-button" href={`/api/auth/google/start?returnTo=${encodeURIComponent(authReturnTo)}`}>
                 <span aria-hidden="true">G</span> Continue with Google
               </a>
               <div className="auth-divider"><span>or use email</span></div>
@@ -1229,6 +1329,11 @@ export default function Home() {
                     <video src={generatorVideoUrl} controls playsInline preload="metadata" />
                   ) : generatorOutputType === "audio" ? (
                     <audio src={generatorVideoUrl} controls preload="metadata" />
+                  ) : generatorOutputType === "file" ? (
+                    <>
+                      <span className="generator-play"><Icon name="check" size={32} /></span>
+                      <span className="generator-preview-copy"><small>DEMO OUTPUT</small><b>Creation Ready</b><a href={generatorVideoUrl} download>Download Demo Result</a></span>
+                    </>
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={generatorVideoUrl} alt={`${model} generated result`} />
@@ -1292,13 +1397,13 @@ export default function Home() {
 
                 <div className="generator-input-summary">
                   <span><Icon name="cube" size={17} /><b>Credit-protected generation</b></span>
-                  <small>Generate dabane par secure Workflow Studio khulega. Job start par estimate reserve, success par once charge, aur permanent failure/cancel par automatic refund hota hai.</small>
+                  <small>Generate dabane par SHAZAN securely creation prepare karta hai. Estimate reserve hota hai, success par sirf ek baar charge aur permanent failure/cancel par automatic refund hota hai.</small>
                 </div>
 
                 {generatorStatus !== "ready" && (
                   <div className={`generator-api-notice status-${generatorStatus}`} role="status">
                     <Icon name={generatorStatus === "completed" ? "check" : generatorStatus === "failed" ? "sliders" : "sparkle"} size={19} />
-                    <span><b>{generatorStatus === "completed" ? "Render complete" : generatorStatus === "failed" ? "Render could not start" : generatorStatus === "uploading" ? "Uploading references" : generatorStatus === "queued" ? "Queued" : "Rendering"}</b><small>{generatorMessage}{generatorRequestId ? ` · Request ${generatorRequestId}` : ""}</small></span>
+                    <span><b>{generatorStatus === "completed" ? "Creation Ready" : generatorStatus === "failed" ? "Creation could not start" : generatorStatus === "uploading" ? "Uploading references" : generatorStatus === "queued" ? "Preparing" : "Creating"}</b><small>{generatorMessage}</small></span>
                   </div>
                 )}
 
