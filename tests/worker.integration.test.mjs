@@ -72,12 +72,30 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     assert.equal(unauthenticatedStudio.status, 302);
     assert.match(unauthenticatedStudio.headers.get("location"), /auth=login/);
     assert.equal((await request("/studio.html", { headers: { Accept: "text/html" } })).status, 302);
+    assert.equal((await request("/projects", { headers: { Accept: "text/html" } })).status, 302);
+    assert.equal((await request("/assets", { headers: { Accept: "text/html" } })).status, 302);
+    assert.equal((await request("/advanced/canvas", { headers: { Accept: "text/html" } })).status, 302);
 
     const owner = await register("Workflow Owner", "owner@example.com");
     const stranger = await register("Second Browser", "stranger@example.com");
     const admin = await register("Studio Admin", "admin@example.com");
     const founder = await register("Verified Founder", "founder@example.com");
     assert.equal(owner.credits, 500);
+
+    const quickCreation = await json(await request("/api/v1/creations", {
+      method: "POST",
+      cookie: stranger.cookie,
+      headers: { "Idempotency-Key": "quick-studio-creation-0001" },
+      body: { mode: "image", model: "gpt_image_2", prompt: "A cinematic golden city", aspect_ratio: "16:9", resolution: "720p", duration: 5 },
+    }));
+    assert.equal(quickCreation.response.status, 202, JSON.stringify(quickCreation.payload));
+    assert.equal(quickCreation.payload.project.workflow.nodes.some((node) => node.type === "image_generator"), true);
+    assert.equal(quickCreation.payload.project.workflow.nodes.some((node) => node.type === "result_preview"), true);
+    assert.equal((await request(`/api/v1/projects/${quickCreation.payload.project.id}`, { cookie: stranger.cookie })).status, 200);
+    const quickCancelled = await json(await request(`/api/v1/jobs/${quickCreation.payload.job.id}/cancel`, { method: "POST", cookie: stranger.cookie, body: {} }));
+    assert.equal(quickCancelled.payload.job.status, "cancelled");
+    const quickCredits = await json(await request("/api/v1/credits", { cookie: stranger.cookie }));
+    assert.deepEqual({ available: quickCredits.payload.wallet.available, reserved: quickCredits.payload.wallet.reserved, spent: quickCredits.payload.wallet.spent }, { available: 500, reserved: 0, spent: 0 });
 
     const founderVerification = await json(await request("/api/auth/verification/send", { method: "POST", cookie: founder.cookie, body: {} }));
     assert.equal((await request(`/api/auth/verification/confirm?token=${founderVerification.payload.debug_token}`)).status, 200);
