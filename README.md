@@ -15,6 +15,11 @@ The launch-safe provider is **SHAZAN Mock Provider**: it executes the complete p
 - Atomic 500-credit signup grant, reservation, exactly-once charge, refund and complete ledger.
 - Admin metrics, user status/role, mandatory-reason credit adjustment, provider switches and audit logs.
 - Webhook event deduplication and health endpoint.
+- Server-enforced feature flags; disabled providers reject direct API calls even if a client is modified.
+- D1 job lease locking, heartbeats, expired-lease recovery and durable attempt records.
+- Global CSP/HSTS/security headers, request IDs and redacted structured error/slow-request logs.
+- Current-device and all-device logout; verified `ADMIN_EMAIL` bootstrap without a hardcoded password.
+- Explicit Demo metadata: `Demo Output — no paid AI model was called.`
 
 ## Architecture
 
@@ -58,6 +63,7 @@ npm run test:e2e
 
 - `migrations/0001_auth.sql` — auth users, sessions and rate limits.
 - `migrations/0002_workflow_studio.sql` — profiles, wallets, ledger, projects, versions, shares, assets, jobs, events, providers, webhooks, audits and atomic credit triggers.
+- `migrations/0003_production_hardening.sql` — feature flags, Runway/MuAPI registry records, durable leases and job-attempt history.
 
 Apply locally:
 
@@ -103,6 +109,7 @@ Required encrypted secrets:
 
 - `AUTH_PEPPER` — stable random 32+ character password pepper.
 - `WEBHOOK_SECRET` — stable random 32+ character provider webhook secret.
+- `ADMIN_EMAIL` — initial administrator email; admin role is granted only after that address is verified.
 
 Authentication integrations:
 
@@ -112,6 +119,8 @@ Authentication integrations:
 Live provider secrets (server only):
 
 - `FAL_KEY`, `KIE_API_KEY`, `OPENAI_API_KEY`.
+
+Public-beta feature flags default closed for paid capabilities. Environment values override database flags: `PUBLIC_BETA`, `ENABLE_DEMO_PROVIDER`, `ENABLE_LIVE_PAYMENTS`, `ENABLE_COMMUNITY`, `ENABLE_GOOGLE_AUTH`, `ENABLE_FAL`, `ENABLE_KIE`, `ENABLE_OPENAI`, `ENABLE_GOOGLE_AI`, `ENABLE_XAI`, `ENABLE_HEYGEN`, `ENABLE_RUNWAY` and `ENABLE_MUAPI`.
 
 The legacy landing generator remains owner-locked by `STUDIO_ACCESS_CODE`; public model cards transfer their prompt/model into the credit-protected Workflow Studio and do not call the legacy paid route.
 
@@ -130,7 +139,10 @@ The consumer retries with delayed exponential backoff and a minute cron fallback
 ## API overview
 
 - `GET /api/v1/health`
+- `GET /api/health` and `GET /api/health/ready`
+- `GET /api/v1/features`
 - `/api/auth/register`, `/login`, `/logout`, `/session`
+- `POST /api/auth/logout-all`
 - `/api/auth/verification/send`, `/verification/confirm`
 - `/api/auth/password/forgot`, `/password/reset`
 - `/api/auth/google/start`, `/google/callback`
@@ -139,6 +151,7 @@ The consumer retries with delayed exponential backoff and a minute cron fallback
 - `/api/v1/jobs/*`, `/events`, `/cancel`, `/retry`
 - `/api/v1/credits`
 - `/api/v1/admin/metrics`, `/users`, `/providers`, `/audit`
+- `/api/v1/admin/features`
 - `/api/v1/webhooks/:provider`
 
 Every private project, job and asset query includes the authenticated owner ID. Mutations reject cross-site origins. Auth and generation paths are rate-limited, uploads are MIME/signature/size checked, filenames are sanitized and all provider secrets stay in Worker bindings.

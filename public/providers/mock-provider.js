@@ -7,6 +7,23 @@ import { calculateWorkflowCost, mockProgressForAge } from "../workflow-domain.js
 export class MockProviderAdapter {
   key = "mock";
 
+  validateConfiguration() {
+    return { ok: true, mode: "demo", secretRequired: false };
+  }
+
+  validateInput({ workflow } = {}) {
+    const cost = calculateWorkflowCost(workflow, this.key);
+    return cost.ok ? { ok: true } : { ok: false, error: cost.error };
+  }
+
+  estimateProviderCost() {
+    return { ok: true, currency: "USD", amount: 0 };
+  }
+
+  estimateCreditCost({ workflow } = {}) {
+    return calculateWorkflowCost(workflow, this.key);
+  }
+
   async submitJob({ jobId, workflowHash }) {
     return { providerRequestId: `mock_${jobId}`, accepted: true, workflowHash };
   }
@@ -25,11 +42,29 @@ export class MockProviderAdapter {
   normalizeResult(result) {
     return {
       provider: this.key,
+      mode: "demo",
+      label: "Demo Output — no paid AI model was called.",
       status: result?.status || "completed",
       contentType: result?.contentType || "application/json",
       filename: result?.filename || "shazan-mock-result.json",
       body: result?.body || JSON.stringify(result || {}),
     };
+  }
+
+  normalizeError(error) {
+    return { code: "DEMO_PROVIDER_ERROR", message: error instanceof Error ? error.message : "Demo Provider failed" };
+  }
+
+  handleWebhook(payload) {
+    return { accepted: true, payload };
+  }
+
+  async verifyWebhook() {
+    return true;
+  }
+
+  async checkAvailability() {
+    return { available: true, mode: "demo" };
   }
 
   calculateCost(workflow) {

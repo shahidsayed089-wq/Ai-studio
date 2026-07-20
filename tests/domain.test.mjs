@@ -8,6 +8,7 @@ import {
   sanitizeFilename,
   validateWorkflow,
 } from "../public/workflow-domain.js";
+import { getProviderAdapter, listProviderAdapters } from "../public/providers/provider-registry.js";
 
 const workflow = {
   nodes: [
@@ -48,4 +49,16 @@ test("job transition, retry and filename security rules are deterministic", () =
   assert.equal(canTransitionJob("completed", "processing"), false);
   assert.deepEqual([1, 2, 3, 20].map(retryDelaySeconds), [2, 4, 8, 300]);
   assert.equal(sanitizeFilename("../../private/<script>.png"), "script-.png");
+});
+
+test("every provider exposes the production adapter contract and paid adapters default closed", async () => {
+  const methods = ["validateConfiguration", "validateInput", "estimateProviderCost", "estimateCreditCost", "submitJob", "getJobStatus", "cancelJob", "normalizeResult", "normalizeError", "handleWebhook", "verifyWebhook", "checkAvailability"];
+  const providers = listProviderAdapters();
+  assert.deepEqual(providers.map((provider) => provider.key), ["mock", "fal", "kie", "openai", "google", "xai", "heygen", "runway", "muapi"]);
+  for (const provider of providers) {
+    const adapter = getProviderAdapter(provider.key);
+    for (const method of methods) assert.equal(typeof adapter[method], "function", `${provider.key}.${method}`);
+  }
+  assert.equal((await getProviderAdapter("mock").checkAvailability()).available, true);
+  assert.equal((await getProviderAdapter("fal").checkAvailability()).available, false);
 });

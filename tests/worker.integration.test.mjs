@@ -33,6 +33,7 @@ const makeRuntime = () => new Miniflare({
     AUTH_PEPPER: "integration-auth-pepper-0123456789abcdef",
     SESSION_SIGNING_KEY: "integration-session-key-0123456789abcdef",
     WEBHOOK_SECRET: "integration-webhook-secret-0123456789abcdef",
+    ADMIN_EMAIL: "founder@example.com",
     APP_ENV: "test",
   },
 });
@@ -57,6 +58,15 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     const health = await json(await request("/api/v1/health"));
     assert.equal(health.response.status, 200);
     assert.equal(health.payload.mock_provider, true);
+    assert.equal(health.payload.job_queue, "durable_d1_fallback");
+    const ready = await json(await request("/api/health/ready"));
+    assert.equal(ready.response.status, 200);
+    assert.equal(ready.payload.ready, true);
+    assert.match(ready.response.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+    assert.match(ready.response.headers.get("x-request-id"), /^[A-Za-z0-9_.:-]{8,80}$/);
+    const features = await json(await request("/api/v1/features"));
+    assert.equal(features.payload.features.ENABLE_DEMO_PROVIDER, true);
+    assert.equal(features.payload.features.ENABLE_LIVE_PAYMENTS, false);
 
     const unauthenticatedStudio = await request("/studio", { headers: { Accept: "text/html" } });
     assert.equal(unauthenticatedStudio.status, 302);
@@ -66,7 +76,12 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     const owner = await register("Workflow Owner", "owner@example.com");
     const stranger = await register("Second Browser", "stranger@example.com");
     const admin = await register("Studio Admin", "admin@example.com");
+    const founder = await register("Verified Founder", "founder@example.com");
     assert.equal(owner.credits, 500);
+
+    const founderVerification = await json(await request("/api/auth/verification/send", { method: "POST", cookie: founder.cookie, body: {} }));
+    assert.equal((await request(`/api/auth/verification/confirm?token=${founderVerification.payload.debug_token}`)).status, 200);
+    assert.equal((await request("/api/v1/admin/metrics", { cookie: founder.cookie })).status, 200);
 
     const badLogin = await request("/api/auth/login", { method: "POST", body: { email: owner.email, password: "incorrect-password" } });
     assert.equal(badLogin.status, 401);
@@ -119,7 +134,14 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
 
     const download = await request(current.payload.job.result_url, { cookie: owner.cookie });
     assert.equal(download.status, 200);
-    assert.match(await download.text(), /SHAZAN AI Workflow Studio/);
+    const demoOutput = await download.text();
+    assert.match(demoOutput, /SHAZAN AI Workflow Studio/);
+    assert.match(demoOutput, /Demo Output — no paid AI model was called/);
+
+    const db = await runtime.getD1Database("DB");
+    const attempts = await db.prepare("SELECT status FROM shazan_job_attempts_v1 WHERE job_id=?").bind(jobId).all();
+    assert.equal(attempts.results.some((attempt) => attempt.status === "completed"), true);
+    assert.equal(Number((await db.prepare("SELECT COUNT(*) AS value FROM shazan_job_leases_v1 WHERE job_id=?").bind(jobId).first()).value), 0);
 
     const webhookBody = { event_id: "provider-event-001", job_id: jobId, status: "completed", message: "duplicate completion" };
     const webhookHeaders = { "X-Webhook-Secret": "integration-webhook-secret-0123456789abcdef" };
@@ -143,8 +165,15 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     const forbiddenAdmin = await request("/api/v1/admin/metrics", { cookie: owner.cookie });
     assert.equal(forbiddenAdmin.status, 403);
     assert.equal((await request("/admin", { cookie: owner.cookie })).status, 403);
-    const db = await runtime.getD1Database("DB");
     await db.prepare("UPDATE shazan_user_profiles_v1 SET role='admin' WHERE user_id=?").bind(admin.id).run();
+    const disableDemo = await json(await request("/api/v1/admin/features/ENABLE_DEMO_PROVIDER", { method: "PATCH", cookie: admin.cookie, body: { enabled: false, reason: "Verify direct API feature enforcement" } }));
+    assert.equal(disableDemo.payload.flag.effective_enabled, false);
+    const disabledRun = await request(`/api/v1/projects/${projectId}/runs`, { method: "POST", cookie: owner.cookie, headers: { "Idempotency-Key": "feature-disabled-run-0001" }, body: { provider: "mock" } });
+    assert.equal(disabledRun.status, 503);
+    const enableDemo = await request("/api/v1/admin/features/ENABLE_DEMO_PROVIDER", { method: "PATCH", cookie: admin.cookie, body: { enabled: true, reason: "Restore Demo Provider after gate test" } });
+    assert.equal(enableDemo.status, 200);
+    const paidProviderBlocked = await request("/api/v1/admin/providers/fal", { method: "PATCH", cookie: admin.cookie, body: { enabled: true, reason: "Must remain disabled before staging" } });
+    assert.equal(paidProviderBlocked.status, 409);
     const adjustment = await json(await request(`/api/v1/admin/users/${owner.id}/credits`, { method: "POST", cookie: admin.cookie, body: { delta: 25, reason: "Launch support grant" } }));
     assert.equal(Number(adjustment.payload.wallet.available), 455);
     const removal = await json(await request(`/api/v1/admin/users/${owner.id}/credits`, { method: "POST", cookie: admin.cookie, body: { delta: -455, reason: "Verify strict zero-credit gate" } }));
@@ -157,6 +186,13 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     const share = await json(await request(`/api/v1/projects/${projectId}/share`, { method: "POST", cookie: owner.cookie, body: { days: 7 } }));
     const shared = await request(`/api/v1/share/${share.payload.share.token}`);
     assert.equal(shared.status, 200);
+
+    const secondOwnerLogin = await request("/api/auth/login", { method: "POST", body: { email: owner.email, password: PASSWORD } });
+    const secondOwnerCookie = cookieFrom(secondOwnerLogin);
+    const logoutAll = await request("/api/auth/logout-all", { method: "POST", cookie: owner.cookie, body: {} });
+    assert.equal(logoutAll.status, 200);
+    assert.equal((await json(await request("/api/auth/session", { cookie: owner.cookie }))).payload.authenticated, false);
+    assert.equal((await json(await request("/api/auth/session", { cookie: secondOwnerCookie }))).payload.authenticated, false);
   } finally {
     await runtime.dispose();
   }

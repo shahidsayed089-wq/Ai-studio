@@ -20,6 +20,8 @@ const worker = {
 
   async scheduled(_controller, env) {
     await ensureWorkflowSchema(env.DB);
+    const timestamp = Math.floor(Date.now() / 1000);
+    await env.DB.prepare("DELETE FROM shazan_job_leases_v1 WHERE leased_until<=?").bind(timestamp).run();
     const pending = await env.DB.prepare("SELECT id,user_id FROM shazan_jobs_v1 WHERE status IN ('queued','processing') ORDER BY updated_at ASC LIMIT 50").all();
     for (const job of pending.results || []) {
       const updated = await processPersistentJob(env, job.id, job.user_id);
@@ -31,8 +33,11 @@ const worker = {
 
   async fetch(_request, env) {
     await ensureWorkflowSchema(env.DB);
-    const pending = await env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_jobs_v1 WHERE status IN ('queued','processing')").first();
-    return Response.json({ status: "ok", service: "SHAZAN queue consumer", pending: Number(pending?.value || 0) });
+    const [pending, activeLeases] = await env.DB.batch([
+      env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_jobs_v1 WHERE status IN ('queued','processing')"),
+      env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_job_leases_v1 WHERE leased_until>?").bind(Math.floor(Date.now() / 1000)),
+    ]);
+    return Response.json({ status: "ok", service: "SHAZAN queue consumer", pending: Number(pending?.results?.[0]?.value || 0), active_leases: Number(activeLeases?.results?.[0]?.value || 0) });
   },
 };
 

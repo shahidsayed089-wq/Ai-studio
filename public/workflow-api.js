@@ -107,6 +107,13 @@ const WORKFLOW_SCHEMA = [
     updated_by TEXT,
     updated_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS shazan_feature_flags_v1 (
+    flag_key TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+    description TEXT NOT NULL DEFAULT '',
+    updated_by TEXT,
+    updated_at INTEGER NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS shazan_jobs_v1 (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -136,6 +143,29 @@ const WORKFLOW_SCHEMA = [
   )`,
   `CREATE INDEX IF NOT EXISTS shazan_jobs_v1_user_idx ON shazan_jobs_v1(user_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS shazan_jobs_v1_status_idx ON shazan_jobs_v1(status, next_attempt_at, updated_at)`,
+  `CREATE TABLE IF NOT EXISTS shazan_job_leases_v1 (
+    job_id TEXT PRIMARY KEY,
+    worker_id TEXT NOT NULL,
+    leased_until INTEGER NOT NULL,
+    heartbeat_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(job_id) REFERENCES shazan_jobs_v1(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS shazan_job_leases_v1_expiry_idx ON shazan_job_leases_v1(leased_until)`,
+  `CREATE TABLE IF NOT EXISTS shazan_job_attempts_v1 (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    attempt_number INTEGER NOT NULL,
+    worker_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('processing','completed','failed','released')),
+    error_code TEXT,
+    error_message TEXT,
+    started_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    UNIQUE(job_id, attempt_number),
+    FOREIGN KEY(job_id) REFERENCES shazan_jobs_v1(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS shazan_job_attempts_v1_job_idx ON shazan_job_attempts_v1(job_id, started_at DESC)`,
   `CREATE TABLE IF NOT EXISTS shazan_job_events_v1 (
     id TEXT PRIMARY KEY,
     job_id TEXT NOT NULL,
@@ -238,6 +268,50 @@ const base64Url = (bytes) => {
 const randomToken = (size = 32) => { const bytes = new Uint8Array(size); crypto.getRandomValues(bytes); return base64Url(bytes); };
 const sha256 = async (value) => base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
 
+export const FEATURE_DEFAULTS = Object.freeze({
+  PUBLIC_BETA: true,
+  ENABLE_DEMO_PROVIDER: true,
+  ENABLE_LIVE_PAYMENTS: false,
+  ENABLE_COMMUNITY: false,
+  ENABLE_GOOGLE_AUTH: true,
+  ENABLE_FAL: false,
+  ENABLE_KIE: false,
+  ENABLE_OPENAI: false,
+  ENABLE_GOOGLE_AI: false,
+  ENABLE_XAI: false,
+  ENABLE_HEYGEN: false,
+  ENABLE_RUNWAY: false,
+  ENABLE_MUAPI: false,
+});
+
+const PROVIDER_FLAGS = Object.freeze({
+  mock: "ENABLE_DEMO_PROVIDER",
+  fal: "ENABLE_FAL",
+  kie: "ENABLE_KIE",
+  openai: "ENABLE_OPENAI",
+  google: "ENABLE_GOOGLE_AI",
+  xai: "ENABLE_XAI",
+  heygen: "ENABLE_HEYGEN",
+  runway: "ENABLE_RUNWAY",
+  muapi: "ENABLE_MUAPI",
+});
+
+const envBoolean = (value) => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : value;
+  if (normalized === true || normalized === "true" || normalized === "1") return true;
+  if (normalized === false || normalized === "false" || normalized === "0") return false;
+  return null;
+};
+
+export const featureEnabled = async (env, flagKey) => {
+  if (!(flagKey in FEATURE_DEFAULTS)) return false;
+  const override = envBoolean(env?.[flagKey]);
+  if (override !== null) return override;
+  if (!env?.DB?.prepare) return FEATURE_DEFAULTS[flagKey];
+  const row = await env.DB.prepare("SELECT enabled FROM shazan_feature_flags_v1 WHERE flag_key=? LIMIT 1").bind(flagKey).first();
+  return row ? Number(row.enabled) === 1 : FEATURE_DEFAULTS[flagKey];
+};
+
 const generationRateLimit = async (request, env, userId, limit = 10, windowSeconds = 60) => {
   const timestamp = now();
   const ip = clean(request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For")?.split(",")[0] || "unknown", 120);
@@ -267,6 +341,10 @@ export const ensureWorkflowSchema = async (db) => {
     db.prepare("INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('google','Google AI',0,'live',?)").bind(timestamp),
     db.prepare("INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('xai','xAI',0,'live',?)").bind(timestamp),
     db.prepare("INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('heygen','HeyGen',0,'live',?)").bind(timestamp),
+    db.prepare("INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('runway','Runway',0,'live',?)").bind(timestamp),
+    db.prepare("INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('muapi','MuAPI',0,'live',?)").bind(timestamp),
+    ...Object.entries(FEATURE_DEFAULTS).map(([flagKey, enabled]) => db.prepare("INSERT OR IGNORE INTO shazan_feature_flags_v1(flag_key,enabled,description,updated_at) VALUES(?,?,?,?)")
+      .bind(flagKey, enabled ? 1 : 0, `Server-side feature gate: ${flagKey}`, timestamp)),
   ]);
   schemaReady.add(db);
 };
@@ -582,12 +660,19 @@ const createWorkflowRun = async (request, env, ctx, actor, projectId) => {
   const body = await readBody(request, ctx);
   if (body.error) return body.error;
   const providerKey = clean(body.value.provider, 40) || "mock";
+  const providerFlag = PROVIDER_FLAGS[providerKey];
+  if (!providerFlag) return apiError(ctx, 400, "Unknown provider");
+  if (!await featureEnabled(env, providerFlag)) return apiError(ctx, 503, "Provider feature disabled", `${providerFlag} is disabled server-side.`);
   const provider = await env.DB.prepare("SELECT * FROM shazan_providers_v1 WHERE provider_key=? LIMIT 1").bind(providerKey).first();
   if (!provider || !provider.enabled) return apiError(ctx, 503, "Provider disabled");
   if (providerKey !== "mock") return apiError(ctx, 501, "Live provider queue pending", "Mock Provider is fully functional. Live adapters require the separate queue consumer deployment.");
   const workflow = parseJson(project.workflow_json);
   const adapter = getProviderAdapter(providerKey);
   if (!adapter) return apiError(ctx, 400, "Unknown provider");
+  const configuration = adapter.validateConfiguration?.(env) || { ok: false, error: "Provider configuration cannot be validated" };
+  if (!configuration.ok) return apiError(ctx, 503, "Provider configuration unavailable", configuration.error);
+  const inputValidation = adapter.validateInput?.({ workflow }) || { ok: false, error: "Provider input cannot be validated" };
+  if (!inputValidation.ok) return apiError(ctx, 400, "Invalid provider input", inputValidation.error);
   const cost = adapter.calculateCost(workflow);
   if (!cost.ok) return apiError(ctx, 400, "Invalid workflow", cost.error);
   const headerKey = clean(request.headers.get("Idempotency-Key"), 120);
@@ -654,18 +739,20 @@ const finalizeMockJob = async (env, job) => {
   const manifest = JSON.stringify({
     product: "SHAZAN AI Workflow Studio",
     provider: "mock",
+    mode: "demo",
+    label: "Demo Output — no paid AI model was called.",
     job_id: job.id,
     project_id: job.project_id,
     project_name: project?.name || "Untitled",
     workflow_hash: job.workflow_hash,
     status: "completed",
     generated_at: new Date(timestamp * 1000).toISOString(),
-    note: "Deterministic mock result used to validate workflow orchestration, persistence and credits without a paid provider.",
+    note: "Demo Output — no paid AI model was called. Deterministic result used to validate workflow orchestration, persistence and credits.",
   }, null, 2);
   await env.MEDIA.put(key, manifest, { httpMetadata: { contentType: "application/json", contentDisposition: `attachment; filename="${filename}"` }, customMetadata: { ownerId: job.user_id, jobId: job.id, assetId } });
   await env.DB.batch([
     env.DB.prepare(`INSERT OR IGNORE INTO shazan_assets_v1(id,owner_id,project_id,job_id,kind,source,filename,content_type,size_bytes,r2_key,metadata_json,created_at)
-      VALUES(?,?,?,?, 'file','mock',?,'application/json',?,?,?,?)`).bind(assetId, job.user_id, job.project_id, job.id, filename, encoder.encode(manifest).byteLength, key, JSON.stringify({ provider: "mock", workflow_hash: job.workflow_hash }), timestamp),
+      VALUES(?,?,?,?, 'file','mock',?,'application/json',?,?,?,?)`).bind(assetId, job.user_id, job.project_id, job.id, filename, encoder.encode(manifest).byteLength, key, JSON.stringify({ provider: "mock", mode: "demo", demo_label: "Demo Output — no paid AI model was called.", workflow_hash: job.workflow_hash }), timestamp),
     env.DB.prepare(`UPDATE shazan_jobs_v1 SET status='completed',progress=100,result_asset_id=?,completed_at=?,updated_at=?,last_error=NULL WHERE id=? AND status='processing'`).bind(assetId, timestamp, timestamp, job.id),
     createJobEvent(env.DB, job.id, "completed", 100, "Mock workflow completed and durable export stored", timestamp),
   ]);
@@ -675,27 +762,52 @@ export const processPersistentJob = async (env, jobId, userId) => {
   let job = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
   if (!job || ["completed","failed","cancelled"].includes(job.status)) return job;
   const timestamp = now();
-  if (job.status === "queued") {
-    if (Number(job.next_attempt_at || 0) > timestamp) return job;
-    const age = timestamp - Number(job.updated_at);
-    const progress = mockProgressForAge(age);
-    if (progress.status === "processing") {
-      await env.DB.batch([
-        env.DB.prepare("UPDATE shazan_jobs_v1 SET status='processing',progress=?,started_at=?,updated_at=? WHERE id=? AND user_id=? AND status='queued'").bind(progress.progress, timestamp, timestamp, jobId, userId),
-        createJobEvent(env.DB, jobId, "processing", progress.progress, "Mock Provider executing workflow graph", timestamp),
-      ]);
-    } else if (age > 0) {
-      await env.DB.prepare("UPDATE shazan_jobs_v1 SET progress=?,updated_at=updated_at WHERE id=? AND user_id=? AND status='queued'").bind(progress.progress, jobId, userId).run();
+  if (job.status === "queued" && Number(job.next_attempt_at || 0) > timestamp) return job;
+
+  const workerId = id();
+  const leaseSeconds = 30;
+  const lease = await env.DB.prepare(`INSERT INTO shazan_job_leases_v1(job_id,worker_id,leased_until,heartbeat_at,created_at)
+    VALUES(?,?,?,?,?)
+    ON CONFLICT(job_id) DO UPDATE SET worker_id=excluded.worker_id,leased_until=excluded.leased_until,heartbeat_at=excluded.heartbeat_at
+    WHERE shazan_job_leases_v1.leased_until<=?`)
+    .bind(jobId, workerId, timestamp + leaseSeconds, timestamp, timestamp, timestamp).run();
+  if (Number(lease?.meta?.changes || 0) === 0) return job;
+
+  try {
+    if (job.status === "queued") {
+      const age = timestamp - Number(job.updated_at);
+      const progress = mockProgressForAge(age);
+      if (progress.status === "processing") {
+        await env.DB.batch([
+          env.DB.prepare("UPDATE shazan_jobs_v1 SET status='processing',progress=?,started_at=?,updated_at=? WHERE id=? AND user_id=? AND status='queued'").bind(progress.progress, timestamp, timestamp, jobId, userId),
+          createJobEvent(env.DB, jobId, "processing", progress.progress, "Demo Provider executing workflow graph", timestamp),
+          env.DB.prepare(`INSERT INTO shazan_job_attempts_v1(id,job_id,attempt_number,worker_id,status,started_at)
+            VALUES(?,?,?,?, 'processing',?) ON CONFLICT(job_id,attempt_number) DO UPDATE SET worker_id=excluded.worker_id,status='processing',error_code=NULL,error_message=NULL,finished_at=NULL`)
+            .bind(id(), jobId, Number(job.attempt), workerId, timestamp),
+        ]);
+      } else if (age > 0) {
+        await env.DB.prepare("UPDATE shazan_jobs_v1 SET progress=?,updated_at=updated_at WHERE id=? AND user_id=? AND status='queued'").bind(progress.progress, jobId, userId).run();
+      }
     }
+    job = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
+    if (job?.status === "processing") {
+      await env.DB.prepare("UPDATE shazan_job_leases_v1 SET heartbeat_at=?,leased_until=? WHERE job_id=? AND worker_id=?")
+        .bind(timestamp, timestamp + leaseSeconds, jobId, workerId).run();
+      const age = timestamp - Number(job.started_at || timestamp);
+      const progress = Math.min(96, 20 + Math.round(age * 10));
+      if (age >= 8) await finalizeMockJob(env, job);
+      else await env.DB.prepare("UPDATE shazan_jobs_v1 SET progress=? WHERE id=? AND user_id=? AND status='processing'").bind(progress, jobId, userId).run();
+    }
+    const latest = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
+    if (latest) {
+      const attemptStatus = latest.status === "completed" ? "completed" : latest.status === "failed" ? "failed" : "released";
+      await env.DB.prepare("UPDATE shazan_job_attempts_v1 SET status=?,error_code=?,error_message=?,finished_at=? WHERE job_id=? AND attempt_number=?")
+        .bind(attemptStatus, latest.status === "failed" ? "DEMO_JOB_FAILED" : null, latest.status === "failed" ? clean(latest.last_error, 500) : null, timestamp, jobId, Number(latest.attempt)).run();
+    }
+    return latest;
+  } finally {
+    await env.DB.prepare("DELETE FROM shazan_job_leases_v1 WHERE job_id=? AND worker_id=?").bind(jobId, workerId).run();
   }
-  job = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
-  if (job?.status === "processing") {
-    const age = timestamp - Number(job.started_at || timestamp);
-    const progress = Math.min(96, 20 + Math.round(age * 10));
-    if (age >= 8) await finalizeMockJob(env, job);
-    else await env.DB.prepare("UPDATE shazan_jobs_v1 SET progress=? WHERE id=? AND user_id=? AND status='processing'").bind(progress, jobId, userId).run();
-  }
-  return env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
 };
 
 const listJobs = async (request, env, ctx, actor) => {
@@ -882,7 +994,42 @@ const adminAdjustCredits = async (request, env, ctx, actor, userId) => {
 
 const listProviders = async (env, ctx) => {
   const result = await env.DB.prepare("SELECT provider_key,display_name,enabled,mode,updated_at FROM shazan_providers_v1 ORDER BY display_name").all();
-  return ctx.json({ providers: result.results || [] });
+  const providers = await Promise.all((result.results || []).map(async (provider) => ({
+    ...provider,
+    effective_enabled: Boolean(provider.enabled) && await featureEnabled(env, PROVIDER_FLAGS[provider.provider_key]),
+    feature_flag: PROVIDER_FLAGS[provider.provider_key] || null,
+  })));
+  return ctx.json({ providers });
+};
+
+const featureSnapshot = async (env) => Object.fromEntries(await Promise.all(Object.keys(FEATURE_DEFAULTS).map(async (flagKey) => [flagKey, await featureEnabled(env, flagKey)])));
+
+const listFeatures = async (env, ctx) => ctx.json({ features: await featureSnapshot(env) });
+
+const adminFeatureFlags = async (env, ctx) => {
+  const rows = await env.DB.prepare("SELECT flag_key,enabled,description,updated_by,updated_at FROM shazan_feature_flags_v1 ORDER BY flag_key").all();
+  const flags = await Promise.all((rows.results || []).map(async (row) => ({
+    ...row,
+    effective_enabled: await featureEnabled(env, row.flag_key),
+    environment_locked: envBoolean(env[row.flag_key]) !== null,
+  })));
+  return ctx.json({ flags });
+};
+
+const adminUpdateFeature = async (request, env, ctx, actor, flagKey) => {
+  if (!(flagKey in FEATURE_DEFAULTS)) return apiError(ctx, 404, "Feature flag not found");
+  if (envBoolean(env[flagKey]) !== null) return apiError(ctx, 409, "Feature flag controlled by environment", `${flagKey} must be changed in Cloudflare environment configuration.`);
+  const body = await readBody(request, ctx);
+  if (body.error) return body.error;
+  if (typeof body.value.enabled !== "boolean") return apiError(ctx, 400, "Boolean enabled required");
+  const reason = clean(body.value.reason, 500);
+  if (reason.length < 5) return apiError(ctx, 400, "Mandatory reason required");
+  const timestamp = now();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE shazan_feature_flags_v1 SET enabled=?,updated_by=?,updated_at=? WHERE flag_key=?").bind(body.value.enabled ? 1 : 0, actor.id, timestamp, flagKey),
+    await auditStatement(request, env, actor, "feature.toggle", "feature_flag", flagKey, reason, { enabled: body.value.enabled }),
+  ]);
+  return ctx.json({ flag: { flag_key: flagKey, enabled: body.value.enabled, effective_enabled: body.value.enabled, updated_at: timestamp } });
 };
 
 const adminUpdateProvider = async (request, env, ctx, actor, providerKey) => {
@@ -893,6 +1040,13 @@ const adminUpdateProvider = async (request, env, ctx, actor, providerKey) => {
   if (typeof body.value.enabled !== "boolean") return apiError(ctx, 400, "Boolean enabled required");
   const reason = clean(body.value.reason, 500);
   if (reason.length < 5) return apiError(ctx, 400, "Mandatory reason required");
+  if (body.value.enabled) {
+    const flagKey = PROVIDER_FLAGS[providerKey];
+    if (!flagKey || !await featureEnabled(env, flagKey)) return apiError(ctx, 409, "Provider feature flag disabled", flagKey ? `Enable ${flagKey} first.` : "Provider has no server feature gate.");
+    const adapter = getProviderAdapter(providerKey);
+    const configuration = adapter?.validateConfiguration?.(env);
+    if (!configuration?.ok) return apiError(ctx, 409, "Provider staging verification incomplete", configuration?.error || "Provider adapter is not production-configured.");
+  }
   const timestamp = now();
   await env.DB.batch([
     env.DB.prepare("UPDATE shazan_providers_v1 SET enabled=?,updated_by=?,updated_at=? WHERE provider_key=?").bind(body.value.enabled ? 1 : 0, actor.id, timestamp, providerKey),
@@ -941,10 +1095,39 @@ const webhook = async (request, env, ctx, providerKey) => {
   return ctx.json({ accepted: true, duplicate: false });
 };
 
-const health = async (env, ctx) => {
+const healthState = async (env) => {
   await ensureWorkflowSchema(env.DB);
   const db = await env.DB.prepare("SELECT 1 AS ok").first();
-  return ctx.json({ status: db?.ok === 1 ? "ok" : "degraded", service: "SHAZAN AI Workflow Studio", version: "workflow-v1", database: db?.ok === 1, asset_storage: Boolean(env.MEDIA?.put), mock_provider: true, timestamp: new Date().toISOString() }, db?.ok === 1 ? 200 : 503);
+  const mockRecord = await env.DB.prepare("SELECT enabled FROM shazan_providers_v1 WHERE provider_key='mock' LIMIT 1").first();
+  const demoEnabled = await featureEnabled(env, "ENABLE_DEMO_PROVIDER");
+  const livePayments = await featureEnabled(env, "ENABLE_LIVE_PAYMENTS");
+  const database = db?.ok === 1;
+  const assetStorage = Boolean(env.MEDIA?.put && env.MEDIA?.get);
+  const mockProvider = demoEnabled && Number(mockRecord?.enabled) === 1;
+  const authSecurity = clean(env.AUTH_PEPPER, 500).length >= 32;
+  const ready = database && assetStorage && mockProvider && authSecurity;
+  return {
+    status: ready ? "ok" : "degraded",
+    service: "SHAZAN AI Workflow Studio",
+    version: "workflow-v1.1",
+    release_mode: "public_beta",
+    database,
+    asset_storage: assetStorage,
+    job_queue: env.WORKFLOW_QUEUE?.send ? "cloudflare_queue" : "durable_d1_fallback",
+    mock_provider: mockProvider,
+    authentication: authSecurity,
+    google_auth: await featureEnabled(env, "ENABLE_GOOGLE_AUTH") ? Boolean(clean(env.GOOGLE_CLIENT_ID, 500) && clean(env.GOOGLE_CLIENT_SECRET, 500)) : "disabled",
+    email_delivery: Boolean(clean(env.RESEND_API_KEY, 500) && clean(env.AUTH_EMAIL_FROM, 500)),
+    live_payments: livePayments ? "configuration_required" : "disabled",
+    ready,
+    timestamp: new Date().toISOString(),
+  };
+};
+
+const health = async (env, ctx, readiness = false) => {
+  const state = await healthState(env);
+  const payload = readiness ? { ready: state.ready, ...state } : state;
+  return ctx.json(payload, state.ready ? 200 : 503);
 };
 
 export const handleWorkflowApi = async (request, env, pathname, ctx) => {
@@ -952,7 +1135,9 @@ export const handleWorkflowApi = async (request, env, pathname, ctx) => {
   try {
     await ensureWorkflowSchema(env.DB);
     const segments = pathname.slice("/api/v1/".length).split("/").filter(Boolean).map((part) => decodeURIComponent(part));
-    if (segments[0] === "health" && request.method === "GET") return health(env, ctx);
+    if (segments[0] === "health" && segments.length === 1 && request.method === "GET") return health(env, ctx);
+    if (segments[0] === "health" && segments[1] === "ready" && request.method === "GET") return health(env, ctx, true);
+    if (segments[0] === "features" && request.method === "GET") return listFeatures(env, ctx);
     if (segments[0] === "share" && segments[1] && request.method === "GET") return getSharedProject(env, ctx, segments[1]);
     if (segments[0] === "webhooks" && segments[1] && request.method === "POST") return webhook(request, env, ctx, segments[1]);
     if (!["GET", "HEAD"].includes(request.method)) {
@@ -1004,6 +1189,8 @@ export const handleWorkflowApi = async (request, env, pathname, ctx) => {
       if (segments[1] === "users" && segments[2] && segments.length === 3 && request.method === "PATCH") return adminUpdateUser(request, env, ctx, actor, segments[2]);
       if (segments[1] === "users" && segments[2] && segments[3] === "credits" && request.method === "POST") return adminAdjustCredits(request, env, ctx, actor, segments[2]);
       if (segments[1] === "providers" && segments[2] && request.method === "PATCH") return adminUpdateProvider(request, env, ctx, actor, segments[2]);
+      if (segments[1] === "features" && segments.length === 2 && request.method === "GET") return adminFeatureFlags(env, ctx);
+      if (segments[1] === "features" && segments[2] && request.method === "PATCH") return adminUpdateFeature(request, env, ctx, actor, segments[2]);
       if (segments[1] === "audit" && request.method === "GET") return adminAuditLogs(request, env, ctx);
     }
     return apiError(ctx, 404, "API route not found");

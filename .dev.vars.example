@@ -2,6 +2,22 @@
 AUTH_PEPPER=replace-with-at-least-32-random-characters
 WEBHOOK_SECRET=replace-with-another-32-character-random-secret
 APP_ENV=development
+ADMIN_EMAIL=founder@your-domain.example
+
+# Server-enforced public beta feature gates
+PUBLIC_BETA=true
+ENABLE_DEMO_PROVIDER=true
+ENABLE_LIVE_PAYMENTS=false
+ENABLE_COMMUNITY=false
+ENABLE_GOOGLE_AUTH=true
+ENABLE_FAL=false
+ENABLE_KIE=false
+ENABLE_OPENAI=false
+ENABLE_GOOGLE_AI=false
+ENABLE_XAI=false
+ENABLE_HEYGEN=false
+ENABLE_RUNWAY=false
+ENABLE_MUAPI=false
 
 # Google OAuth (optional until configured)
 GOOGLE_CLIENT_ID=replace-with-google-client-id
@@ -16,6 +32,13 @@ AUTH_EMAIL_FROM=SHAZAN AI <accounts@your-domain.example>
 FAL_KEY=replace-with-private-fal-key
 KIE_API_KEY=replace-with-private-kie-key
 OPENAI_API_KEY=replace-with-private-openai-key
+GOOGLE_AI_API_KEY=replace-with-private-google-ai-key
+GOOGLE_CLOUD_PROJECT=replace-with-google-cloud-project
+GOOGLE_APPLICATION_CREDENTIALS=replace-with-worker-safe-service-account-json
+XAI_API_KEY=replace-with-private-xai-key
+HEYGEN_API_KEY=replace-with-private-heygen-key
+RUNWAY_API_KEY=replace-with-private-runway-key
+MUAPI_API_KEY=replace-with-private-muapi-key
 
 # Legacy owner-only landing bridge. Public users are routed to Workflow Studio.
 STUDIO_ACCESS_CODE=replace-with-a-long-private-owner-code

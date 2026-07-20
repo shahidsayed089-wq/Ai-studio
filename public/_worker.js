@@ -1,4 +1,4 @@
-import { ensureWorkflowSchema, handleWorkflowApi } from "./workflow-api.js";
+import { ensureWorkflowSchema, featureEnabled, handleWorkflowApi } from "./workflow-api.js";
 
 const KIE_API_BASE_URL = "https://api.kie.ai";
 const KIE_UPLOAD_BASE_URL = "https://kieai.redpandaai.co";
@@ -656,9 +656,10 @@ const getSession = async (request, db) => {
   return { row, tokenHash };
 };
 
-const handleAuthRegister = async (request, db, pepper) => {
+const handleAuthRegister = async (request, env, db, pepper) => {
   const originError = sameOriginMutationError(request);
   if (originError) return originError;
+  if (!await featureEnabled(env, "PUBLIC_BETA")) return json({ error: "Registration is temporarily closed." }, 503);
   const parsed = await readAuthBody(request);
   if (parsed.error) return parsed.error;
   const email = normalizeEmail(parsed.value.email);
@@ -750,6 +751,15 @@ const handleAuthLogout = async (request, db) => {
   return json({ authenticated: false, user: null }, 200, { "Set-Cookie": expiredSessionCookie() });
 };
 
+const handleAuthLogoutAll = async (request, db) => {
+  const originError = sameOriginMutationError(request);
+  if (originError) return originError;
+  const session = await getSession(request, db);
+  if (!session) return json({ error: "Authentication required." }, 401, { "Set-Cookie": expiredSessionCookie() });
+  await db.prepare("DELETE FROM shazan_auth_sessions_v2 WHERE user_id=?").bind(session.row.id).run();
+  return json({ authenticated: false, user: null, revoked_all_sessions: true }, 200, { "Set-Cookie": expiredSessionCookie() });
+};
+
 const authTokenCookie = (name, value, maxAge = 600) => `${name}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
@@ -792,16 +802,24 @@ const handleVerificationSend = async (request, env, db) => {
   return json({ sent: sent.sent, ...(env.APP_ENV === "test" ? { debug_token: token } : {}) });
 };
 
-const handleVerificationConfirm = async (request, db) => {
+const handleVerificationConfirm = async (request, env, db) => {
   const token = new URL(request.url).searchParams.get("token") || "";
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return json({ error: "Invalid verification link." }, 400);
   const current = nowSeconds();
   const row = await db.prepare(`SELECT id,user_id FROM shazan_auth_tokens_v1 WHERE token_hash=? AND purpose='verify_email' AND consumed_at IS NULL AND expires_at>? LIMIT 1`).bind(await sha256(token), current).first();
   if (!row) return json({ error: "Verification link invalid ya expired hai." }, 400);
-  await db.batch([
+  const user = await db.prepare("SELECT email FROM shazan_auth_users_v2 WHERE id=? LIMIT 1").bind(row.user_id).first();
+  const initialAdminEmail = normalizeEmail(env.ADMIN_EMAIL);
+  const verifiedRole = initialAdminEmail && normalizeEmail(user?.email) === initialAdminEmail ? "admin" : null;
+  const statements = [
     db.prepare("UPDATE shazan_auth_tokens_v1 SET consumed_at=? WHERE id=? AND consumed_at IS NULL").bind(current, row.id),
     db.prepare("UPDATE shazan_auth_users_v2 SET email_verified=1,updated_at=? WHERE id=?").bind(current, row.user_id),
-  ]);
+  ];
+  if (verifiedRole) {
+    statements.push(db.prepare("UPDATE shazan_auth_users_v2 SET role='admin',updated_at=? WHERE id=?").bind(current, row.user_id));
+    statements.push(db.prepare("UPDATE shazan_user_profiles_v1 SET role='admin',updated_at=? WHERE user_id=?").bind(current, row.user_id));
+  }
+  await db.batch(statements);
   return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><title>SHAZAN AI verified</title><body style="background:#090603;color:#f6e9d2;font:16px system-ui;display:grid;place-items:center;min-height:100vh"><main><h1>Email verified.</h1><p>Your SHAZAN AI account is ready.</p><a style="color:#f3b34b" href="/studio">Open Workflow Studio</a></main></body>`, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 };
 
@@ -851,6 +869,7 @@ const handlePasswordReset = async (request, env, db, pepper) => {
 };
 
 const handleGoogleStart = async (request, env) => {
+  if (!await featureEnabled(env, "ENABLE_GOOGLE_AUTH")) return json({ error: "Google login is disabled." }, 503);
   const clientId = typeof env.GOOGLE_CLIENT_ID === "string" ? env.GOOGLE_CLIENT_ID.trim() : "";
   if (!clientId) return json({ error: "Google login is not configured.", message: "GOOGLE_CLIENT_ID aur GOOGLE_CLIENT_SECRET add karein." }, 503);
   const state = randomToken(24);
@@ -867,6 +886,7 @@ const handleGoogleStart = async (request, env) => {
 };
 
 const handleGoogleCallback = async (request, env, db) => {
+  if (!await featureEnabled(env, "ENABLE_GOOGLE_AUTH")) return json({ error: "Google login is disabled." }, 503);
   const url = new URL(request.url);
   const state = url.searchParams.get("state") || "";
   const expected = parseCookies(request).get("__Host-shazan_oauth_state") || "";
@@ -889,19 +909,24 @@ const handleGoogleCallback = async (request, env, db) => {
     FROM shazan_auth_identities_v1 i JOIN shazan_auth_users_v2 u ON u.id=i.user_id LEFT JOIN shazan_user_profiles_v1 p ON p.user_id=u.id LEFT JOIN shazan_credit_wallets_v1 w ON w.user_id=u.id
     WHERE i.provider='google' AND i.provider_subject=? LIMIT 1`).bind(subject).first();
   const current = nowSeconds();
+  const initialRole = normalizeEmail(env.ADMIN_EMAIL) === email ? "admin" : "user";
   if (!user) {
     user = await db.prepare("SELECT id,email,display_name,role,credits FROM shazan_auth_users_v2 WHERE email=? LIMIT 1").bind(email).first();
     const userId = user?.id || crypto.randomUUID();
     const statements = [];
     if (!user) {
       statements.push(db.prepare(`INSERT INTO shazan_auth_users_v2(id,email,display_name,password_hash,password_salt,role,status,credits,email_verified,created_at,updated_at)
-        VALUES(?,?,?,'oauth_only','oauth_only','user','active',500,1,?,?)`).bind(userId, email, displayName, current, current));
-      statements.push(db.prepare("INSERT INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,'user',?,?)").bind(userId, current, current));
+        VALUES(?,?,?,'oauth_only','oauth_only',?,'active',500,1,?,?)`).bind(userId, email, displayName, initialRole, current, current));
+      statements.push(db.prepare("INSERT INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,?,?,?)").bind(userId, initialRole, current, current));
       statements.push(db.prepare("INSERT INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,500,0,0,?)").bind(userId, current));
       statements.push(db.prepare(`INSERT INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
         VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account demo credits',?)`).bind(crypto.randomUUID(), userId, userId, current));
     } else {
       statements.push(db.prepare("UPDATE shazan_auth_users_v2 SET email_verified=1,updated_at=? WHERE id=?").bind(current, userId));
+      if (initialRole === "admin") {
+        statements.push(db.prepare("UPDATE shazan_auth_users_v2 SET role='admin',updated_at=? WHERE id=?").bind(current, userId));
+        statements.push(db.prepare("UPDATE shazan_user_profiles_v1 SET role='admin',updated_at=? WHERE user_id=?").bind(current, userId));
+      }
     }
     statements.push(db.prepare("INSERT OR IGNORE INTO shazan_auth_identities_v1(id,user_id,provider,provider_subject,created_at) VALUES(?,?,'google',?,?)").bind(crypto.randomUUID(), userId, subject, current));
     await db.batch(statements);
@@ -920,11 +945,12 @@ const handleAuth = async (request, env, pathname) => {
     const runtime = await getAuthRuntime(env);
     if (runtime.error) return runtime.error;
     if (pathname === "/api/auth/session" && request.method === "GET") return handleAuthSession(request, runtime.db);
-    if (pathname === "/api/auth/register" && request.method === "POST") return handleAuthRegister(request, runtime.db, runtime.pepper);
+    if (pathname === "/api/auth/register" && request.method === "POST") return handleAuthRegister(request, env, runtime.db, runtime.pepper);
     if (pathname === "/api/auth/login" && request.method === "POST") return handleAuthLogin(request, runtime.db, runtime.pepper);
     if (pathname === "/api/auth/logout" && request.method === "POST") return handleAuthLogout(request, runtime.db);
+    if (pathname === "/api/auth/logout-all" && request.method === "POST") return handleAuthLogoutAll(request, runtime.db);
     if (pathname === "/api/auth/verification/send" && request.method === "POST") return handleVerificationSend(request, env, runtime.db);
-    if (pathname === "/api/auth/verification/confirm" && request.method === "GET") return handleVerificationConfirm(request, runtime.db);
+    if (pathname === "/api/auth/verification/confirm" && request.method === "GET") return handleVerificationConfirm(request, env, runtime.db);
     if (pathname === "/api/auth/password/forgot" && request.method === "POST") return handlePasswordForgot(request, env, runtime.db);
     if (pathname === "/api/auth/password/reset" && request.method === "POST") return handlePasswordReset(request, env, runtime.db, runtime.pepper);
     if (pathname === "/api/auth/google/start" && request.method === "GET") return handleGoogleStart(request, env);
@@ -1324,9 +1350,23 @@ const handleStudio = async (request, env, pathname) => {
   }
 };
 
-const worker = {
-  async fetch(request, env) {
+const securityHeaders = (response, requestId) => {
+  const headers = new Headers(response.headers);
+  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self'; font-src 'self' data:; upgrade-insecure-requests");
+  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  headers.set("X-Request-ID", requestId);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+};
+
+const routeRequest = async (request, env) => {
     const { pathname } = new URL(request.url);
+    if (pathname === "/api/health") return handleWorkflowApi(request, env, "/api/v1/health", { json, getSession, sameOriginMutationError });
+    if (pathname === "/api/health/ready") return handleWorkflowApi(request, env, "/api/v1/health/ready", { json, getSession, sameOriginMutationError });
     if (pathname === "/api/auth" || pathname.startsWith("/api/auth/")) return handleAuth(request, env, pathname);
     if (pathname === "/api/v1" || pathname.startsWith("/api/v1/")) return handleWorkflowApi(request, env, pathname, {
       json,
@@ -1349,6 +1389,25 @@ const worker = {
     }
     if (!env.ASSETS?.fetch) return json({ error: "Static assets binding missing." }, 500);
     return env.ASSETS.fetch(request);
+};
+
+const worker = {
+  async fetch(request, env) {
+    const startedAt = Date.now();
+    const incomingRequestId = request.headers.get("X-Request-ID") || "";
+    const requestId = /^[A-Za-z0-9_.:-]{8,80}$/.test(incomingRequestId) ? incomingRequestId : crypto.randomUUID();
+    let response;
+    try {
+      response = await routeRequest(request, env);
+    } catch {
+      response = json({ error: "Internal service error.", request_id: requestId }, 500);
+    }
+    const durationMs = Date.now() - startedAt;
+    const pathname = new URL(request.url).pathname;
+    if ((pathname.startsWith("/api/") && response.status >= 400) || durationMs >= 1500) {
+      console.log(JSON.stringify({ level: response.status >= 500 ? "error" : "info", service: "shazan-worker", request_id: requestId, method: request.method, path: pathname, status: response.status, duration_ms: durationMs }));
+    }
+    return securityHeaders(response, requestId);
   },
 };
 

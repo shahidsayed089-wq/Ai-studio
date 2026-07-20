@@ -13,7 +13,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern playwright-report --ignore-pattern test-results",
     "test": "node --test tests/domain.test.mjs tests/worker.integration.test.mjs",
     "test:e2e": "playwright test",
-    "test:all": "npm run lint && npm run test && npm run build && npm run test:e2e",
+    "test:ui-freeze": "node scripts/check-ui-freeze.mjs",
+    "test:all": "npm run test:ui-freeze && npm run lint && npm run test && npm run build && npm run test:e2e",
     "seed:demo": "node scripts/seed-demo.mjs"
   },
   "dependencies": {

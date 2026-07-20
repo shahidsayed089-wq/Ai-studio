@@ -6,15 +6,16 @@ Release candidate verified on **20 July 2026 (Asia/Kolkata)** with Node.js 22 an
 
 | Command | Result |
 |---|---|
+| `npm run test:ui-freeze` | PASS — all 11 frozen visual source hashes unchanged |
 | `npm run lint` | PASS — zero ESLint errors |
-| `npm test` | PASS — 4/4 Node domain and Miniflare integration tests |
+| `npm test` | PASS — 5/5 Node domain and Miniflare integration tests |
 | `npm run build` | PASS — Next.js production export, 6 application routes plus not-found |
 | `npm run test:e2e` | PASS — 2/2 Chromium Playwright tests |
 | `npm run test:all` | PASS — complete gate exited with code 0 |
 | `npx wrangler deploy --config wrangler.queue.jsonc --dry-run` | PASS — Queue consumer bundle/configuration validated |
 | Local D1 migrations and `npm run seed:demo` | PASS — schema and idempotent seed completed |
 
-Total automated tests: **6 passed, 0 failed, 0 skipped**.
+Total automated tests: **7 passed, 0 failed, 0 skipped**, plus the 11-file UI freeze gate.
 
 ## Requirement matrix
 
@@ -25,10 +26,10 @@ Total automated tests: **6 passed, 0 failed, 0 skipped**.
 | Email/password authentication | PASS | Integration and Playwright registration/login/session tests. |
 | Google login | PASS | Server-only OAuth start/callback implementation and protected callback state; production client secret remains an operational configuration item. |
 | User/creator/admin roles and protected routes | PASS | `/studio` and `/admin` protection plus admin-role integration tests. |
-| Secure sessions, verification and password reset | PASS | HttpOnly signed D1 sessions, expiring one-time tokens and integration coverage. |
-| Provider adapter contract | PASS | Mock, fal, Kie, OpenAI, Google, xAI and HeyGen registry entries expose `submitJob`, `getJobStatus`, `cancelJob`, `normalizeResult` and `calculateCost`. Unverified paid adapters are intentionally disabled. |
+| Secure sessions, verification and password reset | PASS | HttpOnly D1 sessions, expiring one-time tokens, verified `ADMIN_EMAIL`, current-device logout and tested all-device revocation. |
+| Provider adapter contract | PASS | Demo, fal, Kie, OpenAI, Google, xAI, HeyGen, Runway and MuAPI expose the complete 12-method production contract. Unverified paid adapters are intentionally disabled. |
 | Fully functional Mock Provider | PASS | End-to-end durable image/video/export workflow and downloadable R2 result. |
-| Persistent asynchronous jobs | PASS | D1 state machine, optional Cloudflare Queue consumer and cron recovery; refresh-during-processing is covered by Playwright. |
+| Persistent asynchronous jobs | PASS | D1 state machine, lease locking, heartbeat, attempt history, expired-lease recovery, optional Cloudflare Queue consumer and cron recovery; refresh-during-processing is covered by Playwright. |
 | Live progress | PASS | Authenticated SSE stream plus polling fallback. |
 | Queued/processing/completed/failed/cancelled states | PASS | Domain and integration state-transition coverage. |
 | Retry/backoff/cancel/idempotency/error/provider IDs | PASS | Integration tests cover cancel, retry, permanent refund and two-tab duplicate submission. |
@@ -42,9 +43,11 @@ Total automated tests: **6 passed, 0 failed, 0 skipped**.
 | Durable assets, upload validation, search/sort/filter | PASS | R2 API, signature/size/filename validation and Studio asset manager. |
 | Read-only share links | PASS | Expiring token API and unauthenticated share integration test. |
 | Admin metrics/users/providers/errors/audit/search/pagination | PASS | Protected admin API and responsive dashboard. |
-| Ownership/IDOR, XSS, CSRF, rate limits and webhook dedupe | PASS | Server validation and integration coverage for cross-owner access, origin checks and duplicate events. |
+| Ownership/IDOR, XSS, CSRF, rate limits and webhook dedupe | PASS | Server validation, CSP/HSTS headers, request IDs and integration coverage for cross-owner access, origin checks and duplicate events. |
 | Secrets never sent to browser/logs | PASS | Provider/OAuth/email secrets are read only from Worker bindings; client bundle uses no provider secret. |
-| Health endpoint | PASS | `/api/v1/health` implemented and integration-tested. |
+| Health endpoint | PASS | `/api/v1/health`, `/api/health` and readiness endpoint report D1, R2, queue mode, Demo Provider and optional integrations without exposing secrets. |
+| Server feature flags | PASS | Public/admin APIs, environment override locking, audit logs and direct generation rejection when Demo is disabled. |
+| Demo disclosure | PASS | Downloaded result and asset metadata contain “Demo Output — no paid AI model was called.” |
 | Demo user/admin/sample project seed | PASS | Idempotent environment-password seed script. |
 | Loading/empty/error/mobile states | PASS | Studio/admin UI states; Playwright mobile navigation test. |
 | README, environment docs, schema and migrations | PASS | Included in repository. |
@@ -52,7 +55,11 @@ Total automated tests: **6 passed, 0 failed, 0 skipped**.
 
 ## Failed requirements
 
-**None in the automated release candidate.**
+**None in the currently implemented backend-only release candidate.**
+
+## Deferred from the expanded 4 August brief
+
+Stripe test checkout/subscriptions, account export/deletion, community/moderation, identities/consent, notification centre, legal/status UI pages, advanced asset folders/restore, database-driven model pricing and verified paid-provider adapters remain future milestones. They are not represented as working. Live payments, community and every paid provider stay server-disabled until their own tests and operational gates pass.
 
 ## Operational launch gates (not test failures)
 
