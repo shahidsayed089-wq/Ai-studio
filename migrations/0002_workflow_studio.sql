@@ -196,7 +196,8 @@ CREATE TABLE IF NOT EXISTS shazan_webhook_events_v1 (
 
 CREATE TRIGGER IF NOT EXISTS shazan_jobs_reserve_v1 AFTER INSERT ON shazan_jobs_v1
 WHEN NEW.status IN ('queued','processing') BEGIN
-  SELECT CASE WHEN COALESCE((SELECT available FROM shazan_credit_wallets_v1 WHERE user_id=NEW.user_id),-1) < NEW.estimated_credits THEN RAISE(ABORT,'INSUFFICIENT_CREDITS') END;
+  SELECT RAISE(ABORT,'INSUFFICIENT_CREDITS')
+  WHERE COALESCE((SELECT available FROM shazan_credit_wallets_v1 WHERE user_id=NEW.user_id),-1) < NEW.estimated_credits;
   UPDATE shazan_credit_wallets_v1 SET available=available-NEW.estimated_credits,reserved=reserved+NEW.estimated_credits,updated_at=NEW.created_at WHERE user_id=NEW.user_id;
   INSERT INTO shazan_credit_ledger_v1(id,user_id,job_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
   VALUES(lower(hex(randomblob(16))),NEW.user_id,NEW.id,'job:'||NEW.id||':reserve','reserve',-NEW.estimated_credits,NEW.estimated_credits,0,'Workflow job credit reservation',NEW.created_at);
@@ -205,7 +206,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS shazan_jobs_charge_v1 AFTER UPDATE OF status ON shazan_jobs_v1
 WHEN NEW.status='completed' AND OLD.status<>'completed' BEGIN
   UPDATE shazan_credit_wallets_v1 SET reserved=reserved-NEW.estimated_credits,spent=spent+NEW.estimated_credits,updated_at=NEW.updated_at WHERE user_id=NEW.user_id AND reserved>=NEW.estimated_credits;
-  SELECT CASE WHEN changes()=0 THEN RAISE(ABORT,'INVALID_CREDIT_RESERVATION') END;
+  SELECT RAISE(ABORT,'INVALID_CREDIT_RESERVATION') WHERE changes()=0;
   INSERT OR IGNORE INTO shazan_credit_ledger_v1(id,user_id,job_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
   VALUES(lower(hex(randomblob(16))),NEW.user_id,NEW.id,'job:'||NEW.id||':charge','charge',0,-NEW.estimated_credits,NEW.estimated_credits,'Workflow completed exactly once',NEW.updated_at);
 END;
@@ -213,13 +214,14 @@ END;
 CREATE TRIGGER IF NOT EXISTS shazan_jobs_refund_v1 AFTER UPDATE OF status ON shazan_jobs_v1
 WHEN NEW.status IN ('failed','cancelled') AND OLD.status IN ('queued','processing') BEGIN
   UPDATE shazan_credit_wallets_v1 SET available=available+NEW.estimated_credits,reserved=reserved-NEW.estimated_credits,updated_at=NEW.updated_at WHERE user_id=NEW.user_id AND reserved>=NEW.estimated_credits;
-  SELECT CASE WHEN changes()=0 THEN RAISE(ABORT,'INVALID_CREDIT_REFUND') END;
+  SELECT RAISE(ABORT,'INVALID_CREDIT_REFUND') WHERE changes()=0;
   INSERT OR IGNORE INTO shazan_credit_ledger_v1(id,user_id,job_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
-  VALUES(lower(hex(randomblob(16))),NEW.user_id,NEW.id,'job:'||NEW.id||':refund','refund',NEW.estimated_credits,-NEW.estimated_credits,0,CASE WHEN NEW.status='cancelled' THEN 'Cancelled job refund' ELSE 'Permanently failed job refund' END,NEW.updated_at);
+  VALUES(lower(hex(randomblob(16))),NEW.user_id,NEW.id,'job:'||NEW.id||':refund','refund',NEW.estimated_credits,-NEW.estimated_credits,0,iif(NEW.status='cancelled','Cancelled job refund','Permanently failed job refund'),NEW.updated_at);
 END;
 
 CREATE TRIGGER IF NOT EXISTS shazan_admin_credit_apply_v1 AFTER INSERT ON shazan_admin_credit_adjustments_v1 BEGIN
-  SELECT CASE WHEN COALESCE((SELECT available FROM shazan_credit_wallets_v1 WHERE user_id=NEW.target_user_id),-1)+NEW.delta<0 THEN RAISE(ABORT,'INSUFFICIENT_CREDITS') END;
+  SELECT RAISE(ABORT,'INSUFFICIENT_CREDITS')
+  WHERE COALESCE((SELECT available FROM shazan_credit_wallets_v1 WHERE user_id=NEW.target_user_id),-1)+NEW.delta<0;
   UPDATE shazan_credit_wallets_v1 SET available=available+NEW.delta,updated_at=NEW.created_at WHERE user_id=NEW.target_user_id;
   INSERT INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
   VALUES(lower(hex(randomblob(16))),NEW.target_user_id,'admin:'||NEW.id,'admin_adjustment',NEW.delta,0,0,NEW.reason,NEW.created_at);
