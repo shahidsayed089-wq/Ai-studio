@@ -39,7 +39,11 @@ const serveWorker = async (request, response) => {
   const body = ["GET", "HEAD"].includes(request.method || "GET") ? undefined : await readRequestBody(request);
   const upstream = await runtime.dispatchFetch(`${origin}${request.url}`, { method: request.method, headers: request.headers, body, redirect: "manual" });
   response.statusCode = upstream.status;
-  for (const [key, value] of upstream.headers) response.setHeader(key, value);
+  for (const [key, value] of upstream.headers) {
+    if (key.toLowerCase() !== "set-cookie") response.setHeader(key, value);
+  }
+  const setCookies = typeof upstream.headers.getSetCookie === "function" ? upstream.headers.getSetCookie() : [];
+  if (setCookies.length) response.setHeader("Set-Cookie", setCookies);
   if (!upstream.body) return response.end();
   Readable.fromWeb(upstream.body).pipe(response);
 };
