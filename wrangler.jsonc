@@ -16,5 +16,13 @@
       "binding": "MEDIA",
       "bucket_name": "ai-studio-media"
     }
-  ]
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "WORKFLOW_QUEUE",
+        "queue": "shazan-workflow-jobs"
+      }
+    ]
+  }
 }

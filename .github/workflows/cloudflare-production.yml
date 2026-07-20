@@ -1,0 +1,103 @@
+name: Cloudflare Production Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cloudflare-production.yml"
+      - "migrations/**"
+      - "public/**"
+      - "worker/**"
+      - "scripts/compare-d1-restore.mjs"
+      - "wrangler.jsonc"
+      - "wrangler.queue.jsonc"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shazan-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-and-rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      XDG_CONFIG_HOME: ${{ runner.temp }}/xdg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Verify Cloudflare credential is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Missing GitHub Secret CLOUDFLARE_API_TOKEN"; exit 1; }
+          npx wrangler whoami
+
+      - name: Provision Queue and DLQ idempotently
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npx wrangler queues info shazan-workflow-jobs >/dev/null 2>&1; then
+            npx wrangler queues create shazan-workflow-jobs --message-retention-period-secs 345600
+          fi
+          if ! npx wrangler queues info shazan-workflow-jobs-dlq >/dev/null 2>&1; then
+            npx wrangler queues create shazan-workflow-jobs-dlq --message-retention-period-secs 345600
+          fi
+          npx wrangler queues info shazan-workflow-jobs
+          npx wrangler queues info shazan-workflow-jobs-dlq
+
+      - name: Apply and verify production D1 migrations
+        run: |
+          npx wrangler d1 migrations apply ai-studio-wallet --remote
+          npx wrangler d1 migrations list ai-studio-wallet --remote
+          npx wrangler d1 execute ai-studio-wallet --remote --command "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('shazan_feature_flags_v1','shazan_job_leases_v1','shazan_job_attempts_v1') ORDER BY name; SELECT provider_key,enabled FROM shazan_providers_v1 WHERE provider_key<>'mock' AND enabled<>0;"
+
+      - name: Deploy persistent Queue consumer
+        run: npx wrangler deploy --config wrangler.queue.jsonc --keep-vars --strict
+
+      - name: Build and deploy Pages Worker with Queue producer
+        run: |
+          npm run build
+          npx wrangler pages deploy out --project-name ai-studio-1n1 --branch main --commit-hash "$GITHUB_SHA" --commit-message "Cloudflare production infrastructure $GITHUB_SHA"
+
+      - name: Production D1 backup and isolated restore rehearsal
+        shell: bash
+        run: |
+          set -euo pipefail
+          BACKUP="$RUNNER_TEMP/ai-studio-wallet-${GITHUB_RUN_ID}.sql"
+          REHEARSAL="ai-studio-restore-rehearsal-${GITHUB_RUN_ID}"
+          cleanup() { npx wrangler d1 delete "$REHEARSAL" --skip-confirmation >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          npx wrangler d1 export ai-studio-wallet --remote --skip-confirmation --output "$BACKUP"
+          test -s "$BACKUP"
+          npx wrangler d1 create "$REHEARSAL" --location apac
+          npx wrangler d1 execute "$REHEARSAL" --remote --yes --file "$BACKUP"
+          COUNTS_SQL="SELECT 'users' AS entity,COUNT(*) AS value FROM shazan_auth_users_v2 UNION ALL SELECT 'projects',COUNT(*) FROM shazan_projects_v1 UNION ALL SELECT 'jobs',COUNT(*) FROM shazan_jobs_v1 UNION ALL SELECT 'assets',COUNT(*) FROM shazan_assets_v1 UNION ALL SELECT 'ledger',COUNT(*) FROM shazan_credit_ledger_v1;"
+          npx wrangler d1 execute ai-studio-wallet --remote --json --command "$COUNTS_SQL" > "$RUNNER_TEMP/production-counts.json"
+          npx wrangler d1 execute "$REHEARSAL" --remote --json --command "$COUNTS_SQL" > "$RUNNER_TEMP/restored-counts.json"
+          node scripts/compare-d1-restore.mjs "$RUNNER_TEMP/production-counts.json" "$RUNNER_TEMP/restored-counts.json"
+          npx wrangler d1 execute "$REHEARSAL" --remote --command "SELECT COUNT(*) AS invalid_wallets FROM shazan_credit_wallets_v1 WHERE available<0 OR reserved<0 OR spent<0;"
+
+      - name: Verify deployed public endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if curl --fail --silent --show-error https://ai-studio-1n1.pages.dev/api/health > "$RUNNER_TEMP/health.json"; then break; fi
+            sleep 10
+          done
+          cat "$RUNNER_TEMP/health.json"
+          curl --silent --show-error https://ai-studio-1n1.pages.dev/api/health/ready | tee "$RUNNER_TEMP/readiness.json"
+          node -e 'const fs=require("fs");const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(value.job_queue!=="cloudflare_queue")throw new Error(`Queue binding missing: ${value.job_queue}`);' "$RUNNER_TEMP/readiness.json"
