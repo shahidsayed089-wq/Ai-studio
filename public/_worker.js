@@ -762,6 +762,12 @@ const handleAuthLogoutAll = async (request, db) => {
 
 const authTokenCookie = (name, value, maxAge = 600) => `${name}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+const safeAuthReturnTo = (value) => {
+  const target = typeof value === "string" ? value.trim().slice(0, 1000) : "";
+  if (!target.startsWith("/") || target.startsWith("//") || target.includes("\\")) return "";
+  const pathname = target.split(/[?#]/, 1)[0];
+  return ["/studio", "/projects", "/assets", "/advanced/canvas", "/admin"].some((route) => pathname === route || pathname.startsWith(`${route}/`)) ? target : "";
+};
 
 const sendAuthEmail = async (env, to, subject, html) => {
   const apiKey = typeof env.RESEND_API_KEY === "string" ? env.RESEND_API_KEY.trim() : "";
@@ -820,7 +826,7 @@ const handleVerificationConfirm = async (request, env, db) => {
     statements.push(db.prepare("UPDATE shazan_user_profiles_v1 SET role='admin',updated_at=? WHERE user_id=?").bind(current, row.user_id));
   }
   await db.batch(statements);
-  return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><title>SHAZAN AI verified</title><body style="background:#090603;color:#f6e9d2;font:16px system-ui;display:grid;place-items:center;min-height:100vh"><main><h1>Email verified.</h1><p>Your SHAZAN AI account is ready.</p><a style="color:#f3b34b" href="/studio">Open Workflow Studio</a></main></body>`, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><title>SHAZAN AI verified</title><body style="background:#090603;color:#f6e9d2;font:16px system-ui;display:grid;place-items:center;min-height:100vh"><main><h1>Email verified.</h1><p>Your SHAZAN AI account is ready.</p><a style="color:#f3b34b" href="/studio">Open Studio</a></main></body>`, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 };
 
 const handlePasswordForgot = async (request, env, db) => {
@@ -882,7 +888,11 @@ const handleGoogleStart = async (request, env) => {
   target.searchParams.set("scope", "openid email profile");
   target.searchParams.set("state", state);
   target.searchParams.set("prompt", "select_account");
-  return new Response(null, { status: 302, headers: { Location: target.toString(), "Set-Cookie": authTokenCookie("__Host-shazan_oauth_state", state) } });
+  const returnTo = safeAuthReturnTo(new URL(request.url).searchParams.get("returnTo") || "") || "/studio";
+  const headers = new Headers({ Location: target.toString() });
+  headers.append("Set-Cookie", authTokenCookie("__Host-shazan_oauth_state", state));
+  headers.append("Set-Cookie", authTokenCookie("__Host-shazan_oauth_return", encodeURIComponent(returnTo)));
+  return new Response(null, { status: 302, headers });
 };
 
 const handleGoogleCallback = async (request, env, db) => {
@@ -934,9 +944,14 @@ const handleGoogleCallback = async (request, env, db) => {
       FROM shazan_auth_users_v2 u LEFT JOIN shazan_user_profiles_v1 p ON p.user_id=u.id LEFT JOIN shazan_credit_wallets_v1 w ON w.user_id=u.id WHERE u.id=? LIMIT 1`).bind(userId).first();
   }
   const token = await createSession(db, user.id);
-  const headers = new Headers({ Location: `${url.origin}/studio` });
+  const encodedReturnTo = parseCookies(request).get("__Host-shazan_oauth_return") || "";
+  let decodedReturnTo = "";
+  try { decodedReturnTo = decodeURIComponent(encodedReturnTo); } catch { decodedReturnTo = ""; }
+  const returnTo = safeAuthReturnTo(decodedReturnTo) || "/studio";
+  const headers = new Headers({ Location: `${url.origin}${returnTo}` });
   headers.append("Set-Cookie", sessionCookie(token));
   headers.append("Set-Cookie", authTokenCookie("__Host-shazan_oauth_state", "", 0));
+  headers.append("Set-Cookie", authTokenCookie("__Host-shazan_oauth_return", "", 0));
   return new Response(null, { status: 302, headers });
 };
 
@@ -1375,8 +1390,11 @@ const routeRequest = async (request, env) => {
     });
     if (pathname === "/api/studio" || pathname.startsWith("/api/studio/")) return handleStudio(request, env, pathname);
     const studioRoute = pathname === "/studio" || pathname === "/studio.html" || pathname.startsWith("/studio/");
+    const projectRoute = pathname === "/projects" || pathname === "/projects.html" || pathname.startsWith("/projects/");
+    const assetRoute = pathname === "/assets" || pathname === "/assets.html" || pathname.startsWith("/assets/");
+    const canvasRoute = pathname === "/advanced/canvas" || pathname === "/advanced/canvas.html" || pathname.startsWith("/advanced/canvas/");
     const adminRoute = pathname === "/admin" || pathname === "/admin.html" || pathname.startsWith("/admin/");
-    if (studioRoute || adminRoute) {
+    if (studioRoute || projectRoute || assetRoute || canvasRoute || adminRoute) {
       const runtime = await getAuthRuntime(env);
       if (runtime.error) return runtime.error;
       await ensureWorkflowSchema(env.DB);
