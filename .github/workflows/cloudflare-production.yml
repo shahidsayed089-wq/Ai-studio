@@ -70,7 +70,7 @@ jobs:
       - name: Build and deploy Pages Worker with Queue producer
         run: |
           npm run build
-          npx wrangler pages deploy out --project-name ai-studio-1n1 --branch main --commit-hash "$GITHUB_SHA" --commit-message "Cloudflare production infrastructure $GITHUB_SHA"
+          npx wrangler pages deploy out --project-name ai-studio --branch main --commit-hash "$GITHUB_SHA" --commit-message "Cloudflare production infrastructure $GITHUB_SHA"
 
       - name: Production D1 backup and isolated restore rehearsal
         shell: bash
