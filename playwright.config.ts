@@ -14,7 +14,7 @@ export default defineConfig({
     launchOptions: chromiumExecutable ? { executablePath: chromiumExecutable } : undefined,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: process.env.PLAYWRIGHT_VIDEO === "1" ? "retain-on-failure" : "off",
   },
   webServer: {
     command: "npm run build && node scripts/test-server.mjs",
