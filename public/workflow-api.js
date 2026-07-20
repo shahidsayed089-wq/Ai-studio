@@ -284,6 +284,11 @@ export const FEATURE_DEFAULTS = Object.freeze({
   ENABLE_MUAPI: false,
 });
 
+export const RELEASE_LOCKED_OFF = Object.freeze([
+  "ENABLE_LIVE_PAYMENTS", "ENABLE_COMMUNITY", "ENABLE_FAL", "ENABLE_KIE", "ENABLE_OPENAI",
+  "ENABLE_GOOGLE_AI", "ENABLE_XAI", "ENABLE_HEYGEN", "ENABLE_RUNWAY", "ENABLE_MUAPI",
+]);
+
 const PROVIDER_FLAGS = Object.freeze({
   mock: "ENABLE_DEMO_PROVIDER",
   fal: "ENABLE_FAL",
@@ -305,6 +310,7 @@ const envBoolean = (value) => {
 
 export const featureEnabled = async (env, flagKey) => {
   if (!(flagKey in FEATURE_DEFAULTS)) return false;
+  if (RELEASE_LOCKED_OFF.includes(flagKey)) return false;
   const override = envBoolean(env?.[flagKey]);
   if (override !== null) return override;
   if (!env?.DB?.prepare) return FEATURE_DEFAULTS[flagKey];
@@ -540,12 +546,13 @@ const createShare = async (request, env, ctx, actor, projectId) => {
   const body = await readBody(request, ctx);
   if (body.error) return body.error;
   const days = Math.min(365, Math.max(1, Number(body.value.days) || 30));
+  const testSeconds = env.APP_ENV === "test" ? Math.min(60, Math.max(1, Number(body.value.expires_in_seconds) || 0)) : 0;
   const token = randomToken(32);
   const timestamp = now();
   await env.DB.prepare(`INSERT INTO shazan_project_shares_v1(id,project_id,owner_id,token_hash,token_prefix,expires_at,created_at)
-    VALUES(?,?,?,?,?,?,?)`).bind(id(), projectId, actor.id, await sha256(token), token.slice(0, 8), timestamp + days * 86400, timestamp).run();
+    VALUES(?,?,?,?,?,?,?)`).bind(id(), projectId, actor.id, await sha256(token), token.slice(0, 8), timestamp + (testSeconds || days * 86400), timestamp).run();
   const origin = new URL(request.url).origin;
-  return ctx.json({ share: { token, url: `${origin}/share?token=${encodeURIComponent(token)}`, expires_at: timestamp + days * 86400 } }, 201);
+  return ctx.json({ share: { token, url: `${origin}/share?token=${encodeURIComponent(token)}`, expires_at: timestamp + (testSeconds || days * 86400) } }, 201);
 };
 
 const revokeShares = async (env, ctx, actor, projectId) => {
@@ -711,6 +718,42 @@ const createWorkflowRun = async (request, env, ctx, actor, projectId) => {
 
 const mockShouldFail = (job) => /\[fail\]/i.test(job.workflow_json);
 
+const safeAlertEndpoint = (raw) => {
+  try {
+    const url = new URL(String(raw || ""));
+    if (url.protocol !== "https:") return "";
+    const hostname = url.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname.endsWith(".local") || /^(127\.|10\.|192\.168\.|169\.254\.)/.test(hostname)) return "";
+    return url.toString();
+  } catch { return ""; }
+};
+
+export const sendOperationalAlert = async (env, event) => {
+  const endpoint = safeAlertEndpoint(env.ALERT_WEBHOOK_URL);
+  if (!endpoint) return { sent: false, reason: "ALERT_WEBHOOK_URL missing or unsafe" };
+  const normalized = {
+    service: "shazan-ai-studio",
+    environment: clean(env.APP_ENV, 30) || "production",
+    severity: ["info", "warning", "error", "critical"].includes(event?.severity) ? event.severity : "error",
+    type: clean(event?.type, 80) || "application_error",
+    request_id: clean(event?.request_id, 100) || undefined,
+    job_id: clean(event?.job_id, 100) || undefined,
+    provider: clean(event?.provider, 40) || undefined,
+    status: clean(event?.status, 40) || undefined,
+    path: clean(event?.path, 300) || undefined,
+    message: clean(event?.message, 500) || "Operational alert",
+    occurred_at: new Date().toISOString(),
+  };
+  const summary = `[${normalized.severity.toUpperCase()}] ${normalized.type}: ${normalized.message}`;
+  const headers = { "Content-Type": "application/json", "User-Agent": "SHAZAN-AI-Alerts/1.0" };
+  const token = clean(env.ALERT_WEBHOOK_TOKEN, 500);
+  if (token) headers.Authorization = `Bearer ${token}`;
+  try {
+    const response = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify({ text: summary, content: summary, event: normalized }), redirect: "error" });
+    return response.ok ? { sent: true } : { sent: false, reason: `Alert endpoint returned ${response.status}` };
+  } catch { return { sent: false, reason: "Alert delivery failed" }; }
+};
+
 const finalizeMockJob = async (env, job) => {
   const timestamp = now();
   if (mockShouldFail(job)) {
@@ -728,6 +771,7 @@ const finalizeMockJob = async (env, job) => {
       env.DB.prepare(`UPDATE shazan_jobs_v1 SET status='failed',progress=100,last_error='Mock Provider forced failure after all retries',completed_at=?,updated_at=? WHERE id=? AND status='processing'`).bind(timestamp, timestamp, job.id),
       createJobEvent(env.DB, job.id, "failed", 100, "Mock Provider exhausted retry policy", timestamp),
     ]);
+    await sendOperationalAlert(env, { severity: "error", type: "job_permanently_failed", job_id: job.id, provider: job.provider_key, status: "failed", message: "Mock Provider exhausted retry policy" });
     return;
   }
 
@@ -1011,13 +1055,14 @@ const adminFeatureFlags = async (env, ctx) => {
   const flags = await Promise.all((rows.results || []).map(async (row) => ({
     ...row,
     effective_enabled: await featureEnabled(env, row.flag_key),
-    environment_locked: envBoolean(env[row.flag_key]) !== null,
+    environment_locked: RELEASE_LOCKED_OFF.includes(row.flag_key) || envBoolean(env[row.flag_key]) !== null,
   })));
   return ctx.json({ flags });
 };
 
 const adminUpdateFeature = async (request, env, ctx, actor, flagKey) => {
   if (!(flagKey in FEATURE_DEFAULTS)) return apiError(ctx, 404, "Feature flag not found");
+  if (RELEASE_LOCKED_OFF.includes(flagKey)) return apiError(ctx, 409, "Feature is release-locked off", `${flagKey} requires a reviewed code release; it cannot be enabled from the database or admin API.`);
   if (envBoolean(env[flagKey]) !== null) return apiError(ctx, 409, "Feature flag controlled by environment", `${flagKey} must be changed in Cloudflare environment configuration.`);
   const body = await readBody(request, ctx);
   if (body.error) return body.error;
@@ -1105,7 +1150,17 @@ const healthState = async (env) => {
   const assetStorage = Boolean(env.MEDIA?.put && env.MEDIA?.get);
   const mockProvider = demoEnabled && Number(mockRecord?.enabled) === 1;
   const authSecurity = clean(env.AUTH_PEPPER, 500).length >= 32;
-  const ready = database && assetStorage && mockProvider && authSecurity;
+  const production = !["test", "development", "local"].includes(clean(env.APP_ENV, 30).toLowerCase());
+  const queueReady = Boolean(env.WORKFLOW_QUEUE?.send);
+  const googleConfigured = await featureEnabled(env, "ENABLE_GOOGLE_AUTH") && Boolean(clean(env.GOOGLE_CLIENT_ID, 500) && clean(env.GOOGLE_CLIENT_SECRET, 500));
+  const emailConfigured = Boolean(clean(env.RESEND_API_KEY, 500) && clean(env.AUTH_EMAIL_FROM, 500));
+  const alertsConfigured = Boolean(safeAlertEndpoint(env.ALERT_WEBHOOK_URL));
+  const paidFeaturesClosed = !(await featureEnabled(env, "ENABLE_LIVE_PAYMENTS"))
+    && !(await featureEnabled(env, "ENABLE_COMMUNITY"))
+    && await Promise.all(["ENABLE_FAL","ENABLE_KIE","ENABLE_OPENAI","ENABLE_GOOGLE_AI","ENABLE_XAI","ENABLE_HEYGEN","ENABLE_RUNWAY","ENABLE_MUAPI"].map((flag) => featureEnabled(env, flag))).then((states) => states.every((state) => !state));
+  const coreReady = database && assetStorage && mockProvider && authSecurity && paidFeaturesClosed;
+  const launchGates = { cloudflare_queue: queueReady, google_oauth: googleConfigured, transactional_email: emailConfigured, operational_alerts: alertsConfigured, paid_features_closed: paidFeaturesClosed };
+  const ready = coreReady && (!production || Object.values(launchGates).every(Boolean));
   return {
     status: ready ? "ok" : "degraded",
     service: "SHAZAN AI Workflow Studio",
@@ -1113,11 +1168,15 @@ const healthState = async (env) => {
     release_mode: "public_beta",
     database,
     asset_storage: assetStorage,
-    job_queue: env.WORKFLOW_QUEUE?.send ? "cloudflare_queue" : "durable_d1_fallback",
+    environment: production ? "production" : clean(env.APP_ENV, 30) || "local",
+    core_ready: coreReady,
+    launch_gates: launchGates,
+    job_queue: queueReady ? "cloudflare_queue" : "durable_d1_fallback",
     mock_provider: mockProvider,
     authentication: authSecurity,
-    google_auth: await featureEnabled(env, "ENABLE_GOOGLE_AUTH") ? Boolean(clean(env.GOOGLE_CLIENT_ID, 500) && clean(env.GOOGLE_CLIENT_SECRET, 500)) : "disabled",
-    email_delivery: Boolean(clean(env.RESEND_API_KEY, 500) && clean(env.AUTH_EMAIL_FROM, 500)),
+    google_auth: googleConfigured,
+    email_delivery: emailConfigured,
+    error_alerts: alertsConfigured,
     live_payments: livePayments ? "configuration_required" : "disabled",
     ready,
     timestamp: new Date().toISOString(),
@@ -1127,7 +1186,7 @@ const healthState = async (env) => {
 const health = async (env, ctx, readiness = false) => {
   const state = await healthState(env);
   const payload = readiness ? { ready: state.ready, ...state } : state;
-  return ctx.json(payload, state.ready ? 200 : 503);
+  return ctx.json(payload, readiness && !state.ready ? 503 : state.core_ready ? 200 : 503);
 };
 
 export const handleWorkflowApi = async (request, env, pathname, ctx) => {

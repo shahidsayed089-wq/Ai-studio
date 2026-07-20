@@ -1,4 +1,4 @@
-import { ensureWorkflowSchema, featureEnabled, handleWorkflowApi } from "./workflow-api.js";
+import { ensureWorkflowSchema, featureEnabled, handleWorkflowApi, sendOperationalAlert } from "./workflow-api.js";
 
 const KIE_API_BASE_URL = "https://api.kie.ai";
 const KIE_UPLOAD_BASE_URL = "https://kieai.redpandaai.co";
@@ -1392,7 +1392,7 @@ const routeRequest = async (request, env) => {
 };
 
 const worker = {
-  async fetch(request, env) {
+  async fetch(request, env, executionCtx) {
     const startedAt = Date.now();
     const incomingRequestId = request.headers.get("X-Request-ID") || "";
     const requestId = /^[A-Za-z0-9_.:-]{8,80}$/.test(incomingRequestId) ? incomingRequestId : crypto.randomUUID();
@@ -1406,6 +1406,10 @@ const worker = {
     const pathname = new URL(request.url).pathname;
     if ((pathname.startsWith("/api/") && response.status >= 400) || durationMs >= 1500) {
       console.log(JSON.stringify({ level: response.status >= 500 ? "error" : "info", service: "shazan-worker", request_id: requestId, method: request.method, path: pathname, status: response.status, duration_ms: durationMs }));
+    }
+    if (pathname.startsWith("/api/") && pathname !== "/api/health/ready" && response.status >= 500) {
+      const alert = sendOperationalAlert(env, { severity: "error", type: "api_error", request_id: requestId, status: String(response.status), path: pathname, message: `${request.method} ${pathname} returned ${response.status}` });
+      if (executionCtx?.waitUntil) executionCtx.waitUntil(alert); else await alert;
     }
     return securityHeaders(response, requestId);
   },

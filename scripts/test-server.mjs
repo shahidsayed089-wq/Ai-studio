@@ -22,6 +22,9 @@ const runtime = new Miniflare({
     AUTH_PEPPER: "e2e-auth-pepper-0123456789abcdef012345",
     SESSION_SIGNING_KEY: "e2e-session-signing-0123456789abcdef01",
     WEBHOOK_SECRET: "e2e-webhook-secret-0123456789abcdef0123",
+    ADMIN_EMAIL: "e2e-admin@example.com",
+    GOOGLE_CLIENT_ID: "e2e-google-client.apps.googleusercontent.com",
+    GOOGLE_CLIENT_SECRET: "e2e-google-client-secret-not-production",
     APP_ENV: "test",
   },
 });

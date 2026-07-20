@@ -14,7 +14,12 @@
     "test": "node --test tests/domain.test.mjs tests/worker.integration.test.mjs",
     "test:e2e": "playwright test",
     "test:ui-freeze": "node scripts/check-ui-freeze.mjs",
-    "test:all": "npm run test:ui-freeze && npm run lint && npm run test && npm run build && npm run test:e2e",
+    "scan:client-secrets": "node scripts/scan-client-secrets.mjs out",
+    "scan:dependencies": "npm audit --omit=dev --audit-level=high",
+    "test:all": "npm run test:ui-freeze && npm run lint && npm run test && npm run build && npm run scan:client-secrets && npm run test:e2e",
+    "test:production-smoke": "node scripts/production-smoke.mjs",
+    "test:load": "node scripts/load-test.mjs",
+    "verify:cloudflare": "node scripts/cloudflare-verify.mjs",
     "seed:demo": "node scripts/seed-demo.mjs"
   },
   "dependencies": {

@@ -28,6 +28,10 @@ GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
 RESEND_API_KEY=replace-with-resend-api-key
 AUTH_EMAIL_FROM=SHAZAN AI <accounts@your-domain.example>
 
+# Structured API-error and failed-job alerts (server-only HTTPS endpoint)
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/replace/me
+# ALERT_WEBHOOK_TOKEN=optional-bearer-token-for-custom-endpoint
+
 # Live generation providers. Mock Provider requires none of these.
 FAL_KEY=replace-with-private-fal-key
 KIE_API_KEY=replace-with-private-kie-key

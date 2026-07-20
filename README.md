@@ -115,16 +115,29 @@ Authentication integrations:
 
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, optional `GOOGLE_REDIRECT_URI`.
 - `RESEND_API_KEY`, `AUTH_EMAIL_FROM` for verification/reset delivery.
+- `ALERT_WEBHOOK_URL`, optional `ALERT_WEBHOOK_TOKEN` for structured API-error and failed-job alerts.
 
 Live provider secrets (server only):
 
 - `FAL_KEY`, `KIE_API_KEY`, `OPENAI_API_KEY`.
 
-Public-beta feature flags default closed for paid capabilities. Environment values override database flags: `PUBLIC_BETA`, `ENABLE_DEMO_PROVIDER`, `ENABLE_LIVE_PAYMENTS`, `ENABLE_COMMUNITY`, `ENABLE_GOOGLE_AUTH`, `ENABLE_FAL`, `ENABLE_KIE`, `ENABLE_OPENAI`, `ENABLE_GOOGLE_AI`, `ENABLE_XAI`, `ENABLE_HEYGEN`, `ENABLE_RUNWAY` and `ENABLE_MUAPI`.
+Public-beta paid capabilities are code-level release-locked off: payments, community, fal, Kie, OpenAI, Google AI, xAI, HeyGen, Runway and MuAPI cannot be enabled by a database/admin toggle. A future reviewed code release must remove that lock. `PUBLIC_BETA`, `ENABLE_DEMO_PROVIDER` and `ENABLE_GOOGLE_AUTH` remain configurable.
 
 The legacy landing generator remains owner-locked by `STUDIO_ACCESS_CODE`; public model cards transfer their prompt/model into the credit-protected Workflow Studio and do not call the legacy paid route.
 
 Never use a `NEXT_PUBLIC_` name for these values and never paste secrets into browser code, GitHub, screenshots or client logs.
+
+## Production verification commands
+
+```bash
+npm run verify:cloudflare
+npm run test:production-smoke
+npm run test:load
+npm run scan:dependencies
+npm run build && npm run scan:client-secrets
+```
+
+`test:production-smoke` requires two dedicated accounts through `PRODUCTION_SMOKE_USER_EMAIL`, `PRODUCTION_SMOKE_USER_PASSWORD`, `PRODUCTION_SMOKE_SECOND_EMAIL` and `PRODUCTION_SMOKE_SECOND_PASSWORD` to prove private R2 and cross-user isolation without creating unmanaged production accounts. `test:load` uses the primary account and `LOAD_JOB_ID` for authenticated/SSE routes.
 
 ## Optional Cloudflare Queue consumer
 

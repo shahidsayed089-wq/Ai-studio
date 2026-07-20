@@ -1,4 +1,4 @@
-import { ensureWorkflowSchema, processPersistentJob } from "../public/workflow-api.js";
+import { ensureWorkflowSchema, processPersistentJob, sendOperationalAlert } from "../public/workflow-api.js";
 
 const terminal = new Set(["completed", "failed", "cancelled"]);
 
@@ -12,7 +12,8 @@ const worker = {
         const job = await processPersistentJob(env, jobId, userId);
         if (!job || terminal.has(job.status)) message.ack();
         else message.retry({ delaySeconds: job.status === "queued" ? 2 : 8 });
-      } catch {
+      } catch (error) {
+        await sendOperationalAlert(env, { severity: "error", type: "queue_message_failed", job_id: message.body?.jobId, provider: message.body?.provider, status: "retrying", message: String(error?.message || "Queue message processing failed").slice(0, 500) });
         message.retry({ delaySeconds: Math.min(300, 2 ** Math.min(8, message.attempts || 1)) });
       }
     }
