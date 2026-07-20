@@ -1,0 +1,14 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import "./share.css";
+
+type SharedProject = { id: string; name: string; description: string; version: number; updated_at: number; workflow: { nodes: { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }[]; edges: { id: string; source: string; target: string }[] } };
+const labels: Record<string,string> = { text_prompt:"Text Prompt",image_upload:"Image Upload",image_generator:"Image Generator",image_to_video:"Image-to-Video",text_to_video:"Text-to-Video",video_upscaler:"Video Upscaler",result_preview:"Result Preview",download_export:"Download / Export" };
+
+export default function SharedWorkflow() {
+  const [project,setProject]=useState<SharedProject|null>(null); const [error,setError]=useState("");
+  useEffect(()=>{ const token=new URLSearchParams(window.location.search).get("token")||""; if(!token){const timer=window.setTimeout(()=>setError("Share token missing."),0);return()=>window.clearTimeout(timer);} void fetch(`/api/v1/share/${encodeURIComponent(token)}`,{cache:"no-store"}).then(async(response)=>{const payload=await response.json();if(!response.ok)throw new Error(payload.message||payload.error);setProject(payload.project);}).catch((reason)=>setError(reason instanceof Error?reason.message:"Share unavailable")); },[]);
+  return <main className="share-shell"><header><Link href="/"><span>✦</span><b>SHAZAN AI</b></Link><em>READ-ONLY WORKFLOW</em></header>{error?<section className="share-error"><h1>Link unavailable.</h1><p>{error}</p><Link href="/">Return home</Link></section>:!project?<section className="share-loading"><span/><p>Opening shared workflow…</p></section>:<><section className="share-heading"><span><small>SHARED PROJECT · VERSION {project.version}</small><h1>{project.name}</h1><p>{project.description||"A read-only SHAZAN AI workflow."}</p></span><em>Updated {new Date(project.updated_at*1000).toLocaleString()}</em></section><section className="share-canvas"><div className="share-grid"/><svg>{project.workflow.edges.map((edge)=>{const source=project.workflow.nodes.find((node)=>node.id===edge.source);const target=project.workflow.nodes.find((node)=>node.id===edge.target);if(!source||!target)return null;const x1=source.position.x+200,y1=source.position.y+42,x2=target.position.x,y2=target.position.y+42,b=Math.max(55,Math.abs(x2-x1)*.45);return <path key={edge.id} d={`M${x1} ${y1} C${x1+b} ${y1},${x2-b} ${y2},${x2} ${y2}`}/>})}</svg>{project.workflow.nodes.map((node)=><article style={{transform:`translate(${node.position.x}px,${node.position.y}px)`}} key={node.id}><small>{node.type.replaceAll("_"," ")}</small><b>{labels[node.type]||node.type}</b><p>{String(node.data.prompt||node.data.model||"Configured node")}</p></article>)}</section></>}</main>;
+}

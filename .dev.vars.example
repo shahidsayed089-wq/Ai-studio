@@ -1,20 +1,35 @@
-# Primary server-side generation token. Never use NEXT_PUBLIC_ and never commit the real value.
-FAL_KEY=replace-with-your-private-fal-key
-
-# OpenAI Speech API for the GPT Voice generator.
-OPENAI_API_KEY=replace-with-your-private-openai-key
-
-# Owner gate stays enabled until SHAZAN user accounts and credit wallets launch.
-STUDIO_ACCESS_CODE=replace-with-a-long-private-owner-code
-
-# Password hashing pepper for D1-backed login/register. Use a random 32+ character secret.
+# Authentication security (required, stable and secret)
 AUTH_PEPPER=replace-with-at-least-32-random-characters
+WEBHOOK_SECRET=replace-with-another-32-character-random-secret
+APP_ENV=development
 
-# Optional fallback for Seedance Mini and Kling Elements.
-KIE_API_KEY=replace-with-your-private-kie-key
+# Google OAuth (optional until configured)
+GOOGLE_CLIENT_ID=replace-with-google-client-id
+GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
+# GOOGLE_REDIRECT_URI=http://localhost:8788/api/auth/google/callback
 
-# Optional service overrides. The defaults already point at the production APIs.
+# Verification and password reset email (optional in APP_ENV=test)
+RESEND_API_KEY=replace-with-resend-api-key
+AUTH_EMAIL_FROM=SHAZAN AI <accounts@your-domain.example>
+
+# Live generation providers. Mock Provider requires none of these.
+FAL_KEY=replace-with-private-fal-key
+KIE_API_KEY=replace-with-private-kie-key
+OPENAI_API_KEY=replace-with-private-openai-key
+
+# Legacy owner-only landing bridge. Public users are routed to Workflow Studio.
+STUDIO_ACCESS_CODE=replace-with-a-long-private-owner-code
+STUDIO_ALLOW_PUBLIC=false
+
+# Optional service overrides
 # KIE_API_BASE_URL=https://api.kie.ai
 # KIE_UPLOAD_BASE_URL=https://kieai.redpandaai.co
 # FAL_QUEUE_BASE_URL=https://queue.fal.run
 # FAL_STORAGE_BASE_URL=https://rest.fal.ai
+# OPENAI_API_BASE_URL=https://api.openai.com
+
+# Seed command only; do not store production passwords in this file/repository.
+# DEMO_USER_EMAIL=demo@shazan.ai
+# DEMO_ADMIN_EMAIL=admin@shazan.ai
+# DEMO_USER_PASSWORD=strong-private-password
+# DEMO_ADMIN_PASSWORD=another-private-password

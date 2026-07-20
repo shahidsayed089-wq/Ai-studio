@@ -1,91 +1,73 @@
-# Cloudflare deployment
+# Cloudflare production runbook
 
-The project deploys to the existing `ai-studio-1n1` Cloudflare Pages project as a Next.js static export with a private SHAZAN generation bridge.
+## Pages project
 
-## Build settings
+- Project: `ai-studio-1n1`
+- Branch: `main`
+- Build: `npm run build`
+- Output: `out`
+- Node: `22`
 
-1. Production branch: `main`
-2. Build command: `npm run build`
-3. Build output directory: `out`
-4. Node.js: `22`
+`wrangler.jsonc` owns the production bindings:
 
-`public/_worker.js` is copied to `out/_worker.js` and runs through Cloudflare Pages Advanced Mode. It handles `/api/studio/*` and `/api/auth/*`; every other request is forwarded to static assets through `env.ASSETS`.
+- `DB` → `ai-studio-wallet`
+- `MEDIA` → `ai-studio-media`
 
-## D1 account database
+If the dashboard says a binding name already exists, do not add another one. Commit the binding in `wrangler.jsonc` and redeploy.
 
-Production bindings are committed in `wrangler.jsonc`, which is the source of truth for this Pages project:
+## Release order
 
-- `DB` → D1 database `ai-studio-wallet`
-- `MEDIA` → R2 bucket `ai-studio-media`
+1. Back up D1.
+2. Run `npm ci && npm run lint && npm test && npm run build && npm run test:e2e`.
+3. Apply `0001_auth.sql` and `0002_workflow_studio.sql` remotely.
+4. Verify Production secrets and bindings.
+5. Merge/push `main`; wait for Cloudflare Pages deployment success.
+6. Check `/api/v1/health`, register a staging account and execute one Mock workflow.
+7. Confirm available/reserved/spent balances and exactly one `charge` ledger entry.
+8. Verify protected `/studio` and `/admin`, share link, R2 download and mobile navigation.
+9. Enable live providers one at a time only after staging cost reconciliation.
 
-Cloudflare therefore shows these production binding controls as read-only in the dashboard. Change the repository config rather than creating a duplicate dashboard binding, then redeploy the latest `main` branch.
+## Required production secrets
 
-The Worker runs idempotent `CREATE TABLE IF NOT EXISTS` statements on first use. The same schema is committed at `migrations/0001_auth.sql` for controlled migrations and backups.
+- `AUTH_PEPPER` (32+ characters, stable)
+- `WEBHOOK_SECRET` (32+ characters, stable)
 
-## Required encrypted secrets
+Optional integrations:
 
-Open **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** and add these to both Production and Preview:
+- Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
+- Email: `RESEND_API_KEY`, `AUTH_EMAIL_FROM`
+- Providers: `FAL_KEY`, `KIE_API_KEY`, `OPENAI_API_KEY`
+- Legacy owner route only: `STUDIO_ACCESS_CODE`; keep `STUDIO_ALLOW_PUBLIC=false`
 
-- `FAL_KEY`: primary private fal.ai API token.
-- `OPENAI_API_KEY`: private OpenAI token used by GPT Voice.
-- `STUDIO_ACCESS_CODE`: a long temporary owner-only generation code.
-- `KIE_API_KEY`: optional Kie fallback token for Seedance Mini and Kling Elements.
-- `AUTH_PEPPER`: a stable random secret of at least 32 characters for password hashing.
+Cloudflare variable names must use underscores exactly. Names such as `Fal ai`, `Open ai key` or `Kie.com` are not read by the Worker.
 
-Set every token and access code to **Secret**, not plain text. Never add tokens to GitHub, browser code, screenshots or chat.
+## Migrations
 
-## Routes
+```bash
+npx wrangler d1 migrations apply ai-studio-wallet --remote
+```
 
-- `POST /api/auth/register` — creates a D1 user and secure session.
-- `POST /api/auth/login` — verifies credentials with rate limiting.
-- `GET /api/auth/session` — restores a valid session.
-- `POST /api/auth/logout` — revokes the session.
+Both migrations are idempotent. Do not manually edit balances: use the admin credit adjustment endpoint/dashboard so the mandatory reason and audit log remain intact.
 
-- `POST /api/studio/upload` — temporarily uploads a reference asset.
-- `POST /api/studio/generate` — validates the SHAZAN model key and creates an asynchronous task.
-- `GET /api/studio/status/:requestId` — normalizes task progress and result URLs.
+## Queue consumer
 
-The external token is added only by the Worker. Public responses use SHAZAN-facing names and generic errors.
+Mock execution has a D1/SSE fallback. For true background delivery, create:
 
-## Connected fal.ai model IDs
+- Queue `shazan-workflow-jobs`
+- Dead-letter queue `shazan-workflow-jobs-dlq`
+- Pages producer binding `WORKFLOW_QUEUE`
 
-- `gemini_omni_flash` → `google/gemini-omni-flash` or `/reference-to-video`
-- `grok_imagine_video_1_5` → `xai/grok-imagine-video/v1.5/image-to-video`
-- `seedance_2_0_standard` / `seedance_2_0_fast` → matching fal text, image or reference endpoint
-- `kling_3_0` → `fal-ai/kling-video/v3/pro/*`
-- `kling_3_0_omni` → `fal-ai/kling-video/o3/4k/image-to-video`
-- `veo_3_1` → matching Veo 3.1 text, image or reference endpoint
-- `happy_horse_1_1` → matching HappyHorse 1.1 text or image endpoint
-- Image models → GPT Image 2, Nano Banana 2 / Pro, Grok Imagine Image and FLUX 2 Pro
-- `lyria_3` → `fal-ai/lyria3`
-- `audioflow_elevenlabs` → `fal-ai/elevenlabs/music`
-- `score_composer_cassetteai` → `CassetteAI/music-generator`
-- `elevenlabs_voice` → `fal-ai/elevenlabs/tts/eleven-v3`
-- `voice_forge` → `fal-ai/elevenlabs/text-to-voice/design/eleven-v3`
-- `multilingual_pro` → `fal-ai/elevenlabs/tts/multilingual-v2`
-- `heygen_avatar_iv` → `fal-ai/heygen/avatar4/image-to-video`
-- `avatar_one` → `fal-ai/kling-video/ai-avatar/v2/standard`
-- `digital_twin` → `fal-ai/bytedance/omnihuman`
-- `performance_capture` → `fal-ai/wan-motion`
+Then deploy the independent consumer:
 
-OpenAI voice route:
+```bash
+npx wrangler deploy --config wrangler.queue.jsonc
+```
 
-- `gpt_voice` → OpenAI `/v1/audio/speech` with `gpt-4o-mini-tts`; the MP3 is copied to private fal storage for preview.
+Its cron runs every minute as a recovery sweep. Queue redelivery cannot double-charge because D1 state transitions and ledger event keys are atomic and unique.
 
-Kie fallbacks:
+## Rollback
 
-- `seedance_2_0_mini` → `bytedance/seedance-2-mini`
-- `kling_3_0_elements` → `kling-3.0/video` with one prompt-addressable video element
-- `suno` → Kie Suno `/api/v1/generate` and `/api/v1/generate/record-info`
-
-No per-model endpoint environment variables are required.
-
-## Optional variables
-
-- `KIE_API_BASE_URL`: defaults to `https://api.kie.ai`.
-- `KIE_UPLOAD_BASE_URL`: defaults to `https://kieai.redpandaai.co`.
-- `FAL_QUEUE_BASE_URL`: defaults to `https://queue.fal.run`.
-- `FAL_STORAGE_BASE_URL`: defaults to `https://rest.fal.ai`.
-- `OPENAI_API_BASE_URL`: defaults to `https://api.openai.com`.
-
-Generation is owner-only by default and spends from the configured provider balance. Keep that gate enabled until a credit wallet, quotas, rate limits and abuse controls are in production. Generated media is temporary upstream; copy completed customer assets to durable SHAZAN storage.
+- Roll back Pages to the previous successful deployment.
+- Disable live providers in `/admin`; Mock Provider stays enabled.
+- Do not delete D1/R2 data during rollback.
+- Inspect `/admin` recent errors and audit logs before retrying.

@@ -1,3 +1,5 @@
+import { ensureWorkflowSchema, handleWorkflowApi } from "./workflow-api.js";
+
 const KIE_API_BASE_URL = "https://api.kie.ai";
 const KIE_UPLOAD_BASE_URL = "https://kieai.redpandaai.co";
 const FAL_QUEUE_BASE_URL = "https://queue.fal.run";
@@ -527,6 +529,7 @@ const getAuthRuntime = async (env) => {
     }, 503) };
   }
   await ensureAuthSchema(env.DB);
+  await ensureWorkflowSchema(env.DB);
   return { db: env.DB, pepper };
 };
 
@@ -637,8 +640,9 @@ const getSession = async (request, db) => {
   if (!token || !/^[A-Za-z0-9_-]{40,60}$/.test(token)) return null;
   const tokenHash = await sha256(token);
   const row = await db.prepare(`SELECT s.id AS session_id, s.expires_at, s.last_seen_at,
-      u.id, u.email, u.display_name, u.role, u.status, u.credits
+      u.id, u.email, u.display_name, COALESCE(p.role,u.role) AS role, u.status, u.email_verified, COALESCE(w.available,u.credits) AS credits
     FROM shazan_auth_sessions_v2 s JOIN shazan_auth_users_v2 u ON u.id = s.user_id
+    LEFT JOIN shazan_user_profiles_v1 p ON p.user_id=u.id LEFT JOIN shazan_credit_wallets_v1 w ON w.user_id=u.id
     WHERE s.token_hash = ? LIMIT 1`).bind(tokenHash).first();
   if (!row) return null;
   const current = nowSeconds();
@@ -679,15 +683,21 @@ const handleAuthRegister = async (request, db, pepper) => {
   const current = nowSeconds();
   const userId = crypto.randomUUID();
   try {
-    await db.prepare(`INSERT INTO shazan_auth_users_v2 (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'user', 'active', 0, 0, ?, ?)`)
-      .bind(userId, email, displayName, passwordHash, salt, current, current).run();
+    await db.batch([
+      db.prepare(`INSERT INTO shazan_auth_users_v2 (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'user', 'active', 500, 0, ?, ?)`)
+        .bind(userId, email, displayName, passwordHash, salt, current, current),
+      db.prepare("INSERT INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,'user',?,?)").bind(userId, current, current),
+      db.prepare("INSERT INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,500,0,0,?)").bind(userId, current),
+      db.prepare(`INSERT INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
+        VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account demo credits',?)`).bind(crypto.randomUUID(), userId, userId, current),
+    ]);
   } catch (error) {
     if (/unique|constraint/i.test(String(error?.message || error))) return json({ error: "Is email ka account already hai. Sign in karein." }, 409);
     throw error;
   }
   const token = await createSession(db, userId);
-  return json({ authenticated: true, user: { id: userId, email, name: displayName, role: "user", credits: 0 } }, 201, {
+  return json({ authenticated: true, user: { id: userId, email, name: displayName, role: "user", credits: 500 } }, 201, {
     "Set-Cookie": sessionCookie(token),
   });
 };
@@ -705,8 +715,9 @@ const handleAuthLogin = async (request, db, pepper) => {
   const retryAfter = await getRateLimit(db, scopeKey, 5, 15 * 60);
   if (retryAfter) return json({ error: "Too many login attempts. 15 minute baad retry karein." }, 429, { "Retry-After": String(retryAfter) });
 
-  const user = await db.prepare(`SELECT id, email, display_name, password_hash, password_salt, role, status, credits
-    FROM shazan_auth_users_v2 WHERE email = ? LIMIT 1`).bind(email).first();
+  const user = await db.prepare(`SELECT u.id,u.email,u.display_name,u.password_hash,u.password_salt,COALESCE(p.role,u.role) AS role,u.status,COALESCE(w.available,u.credits) AS credits
+    FROM shazan_auth_users_v2 u LEFT JOIN shazan_user_profiles_v1 p ON p.user_id=u.id LEFT JOIN shazan_credit_wallets_v1 w ON w.user_id=u.id
+    WHERE u.email = ? LIMIT 1`).bind(email).first();
   const storedMatch = user && typeof user.password_hash === "string"
     ? user.password_hash.match(/^pbkdf2_sha256\$(\d{4,7})\$([A-Za-z0-9_-]{40,60})$/)
     : null;
@@ -739,6 +750,171 @@ const handleAuthLogout = async (request, db) => {
   return json({ authenticated: false, user: null }, 200, { "Set-Cookie": expiredSessionCookie() });
 };
 
+const authTokenCookie = (name, value, maxAge = 600) => `${name}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+
+const sendAuthEmail = async (env, to, subject, html) => {
+  const apiKey = typeof env.RESEND_API_KEY === "string" ? env.RESEND_API_KEY.trim() : "";
+  const from = typeof env.AUTH_EMAIL_FROM === "string" ? env.AUTH_EMAIL_FROM.trim() : "SHAZAN AI <onboarding@resend.dev>";
+  if (!apiKey) return { sent: false, reason: "RESEND_API_KEY missing" };
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: [to], subject, html }),
+  });
+  if (!response.ok) return { sent: false, reason: `Email provider returned ${response.status}` };
+  return { sent: true };
+};
+
+const createOneTimeAuthToken = async (db, userId, purpose, lifetimeSeconds) => {
+  const token = randomToken(32);
+  const current = nowSeconds();
+  await db.prepare(`INSERT INTO shazan_auth_tokens_v1(id,user_id,purpose,token_hash,expires_at,created_at) VALUES(?,?,?,?,?,?)`)
+    .bind(crypto.randomUUID(), userId, purpose, await sha256(token), current + lifetimeSeconds, current).run();
+  return token;
+};
+
+const handleVerificationSend = async (request, env, db) => {
+  const originError = sameOriginMutationError(request);
+  if (originError) return originError;
+  const session = await getSession(request, db);
+  if (!session) return json({ error: "Authentication required." }, 401);
+  if (session.row.email_verified) return json({ sent: true, already_verified: true });
+  const scopeKey = await rateLimitKey("verify-email", request, env.AUTH_PEPPER, session.row.id);
+  const retryAfter = await getRateLimit(db, scopeKey, 3, 60 * 60);
+  if (retryAfter) return json({ error: "Verification email limit reached." }, 429, { "Retry-After": String(retryAfter) });
+  await recordRateEvent(db, scopeKey, 3, 60 * 60);
+  const token = await createOneTimeAuthToken(db, session.row.id, "verify_email", 24 * 60 * 60);
+  const origin = new URL(request.url).origin;
+  const link = `${origin}/api/auth/verification/confirm?token=${encodeURIComponent(token)}`;
+  const sent = await sendAuthEmail(env, session.row.email, "Verify your SHAZAN AI account", `<h1>Verify your email</h1><p>Hello ${escapeHtml(session.row.display_name)},</p><p><a href="${escapeHtml(link)}">Verify SHAZAN AI account</a></p><p>This link expires in 24 hours.</p>`);
+  if (!sent.sent && env.APP_ENV !== "test") return json({ error: "Email delivery is not configured.", message: "Cloudflare secret RESEND_API_KEY add karein." }, 503);
+  return json({ sent: sent.sent, ...(env.APP_ENV === "test" ? { debug_token: token } : {}) });
+};
+
+const handleVerificationConfirm = async (request, db) => {
+  const token = new URL(request.url).searchParams.get("token") || "";
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return json({ error: "Invalid verification link." }, 400);
+  const current = nowSeconds();
+  const row = await db.prepare(`SELECT id,user_id FROM shazan_auth_tokens_v1 WHERE token_hash=? AND purpose='verify_email' AND consumed_at IS NULL AND expires_at>? LIMIT 1`).bind(await sha256(token), current).first();
+  if (!row) return json({ error: "Verification link invalid ya expired hai." }, 400);
+  await db.batch([
+    db.prepare("UPDATE shazan_auth_tokens_v1 SET consumed_at=? WHERE id=? AND consumed_at IS NULL").bind(current, row.id),
+    db.prepare("UPDATE shazan_auth_users_v2 SET email_verified=1,updated_at=? WHERE id=?").bind(current, row.user_id),
+  ]);
+  return new Response(`<!doctype html><meta name="viewport" content="width=device-width"><title>SHAZAN AI verified</title><body style="background:#090603;color:#f6e9d2;font:16px system-ui;display:grid;place-items:center;min-height:100vh"><main><h1>Email verified.</h1><p>Your SHAZAN AI account is ready.</p><a style="color:#f3b34b" href="/studio">Open Workflow Studio</a></main></body>`, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+};
+
+const handlePasswordForgot = async (request, env, db) => {
+  const originError = sameOriginMutationError(request);
+  if (originError) return originError;
+  const parsed = await readAuthBody(request);
+  if (parsed.error) return parsed.error;
+  const email = normalizeEmail(parsed.value.email);
+  const scopeKey = await rateLimitKey("forgot-password", request, env.AUTH_PEPPER, email);
+  const retryAfter = await getRateLimit(db, scopeKey, 3, 60 * 60);
+  if (retryAfter) return json({ accepted: true });
+  await recordRateEvent(db, scopeKey, 3, 60 * 60);
+  const user = validEmail(email) ? await db.prepare("SELECT id,email,display_name FROM shazan_auth_users_v2 WHERE email=? AND status='active' LIMIT 1").bind(email).first() : null;
+  let debugToken;
+  if (user) {
+    const token = await createOneTimeAuthToken(db, user.id, "reset_password", 30 * 60);
+    const origin = new URL(request.url).origin;
+    const link = `${origin}/reset?token=${encodeURIComponent(token)}`;
+    await sendAuthEmail(env, user.email, "Reset your SHAZAN AI password", `<h1>Password reset</h1><p>Hello ${escapeHtml(user.display_name)},</p><p><a href="${escapeHtml(link)}">Choose a new password</a></p><p>This one-time link expires in 30 minutes.</p>`);
+    if (env.APP_ENV === "test") debugToken = token;
+  }
+  return json({ accepted: true, message: "Account exist karta ho toh reset email send ho gaya.", ...(debugToken ? { debug_token: debugToken } : {}) });
+};
+
+const handlePasswordReset = async (request, env, db, pepper) => {
+  const originError = sameOriginMutationError(request);
+  if (originError) return originError;
+  const parsed = await readAuthBody(request);
+  if (parsed.error) return parsed.error;
+  const token = typeof parsed.value.token === "string" ? parsed.value.token : "";
+  const password = parsed.value.password;
+  const passwordError = passwordValidationMessage(password);
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token) || passwordError) return json({ error: passwordError || "Invalid reset token." }, 400);
+  const current = nowSeconds();
+  const row = await db.prepare(`SELECT id,user_id FROM shazan_auth_tokens_v1 WHERE token_hash=? AND purpose='reset_password' AND consumed_at IS NULL AND expires_at>? LIMIT 1`).bind(await sha256(token), current).first();
+  if (!row) return json({ error: "Reset link invalid ya expired hai." }, 400);
+  const salt = randomToken(16);
+  const digest = await hashPassword(password, salt, pepper);
+  const passwordHash = `pbkdf2_sha256$${AUTH_PBKDF2_ITERATIONS}$${digest}`;
+  await db.batch([
+    db.prepare("UPDATE shazan_auth_tokens_v1 SET consumed_at=? WHERE id=? AND consumed_at IS NULL").bind(current, row.id),
+    db.prepare("UPDATE shazan_auth_users_v2 SET password_hash=?,password_salt=?,updated_at=? WHERE id=?").bind(passwordHash, salt, current, row.user_id),
+    db.prepare("DELETE FROM shazan_auth_sessions_v2 WHERE user_id=?").bind(row.user_id),
+  ]);
+  return json({ reset: true, message: "Password updated. Ab sign in karein." });
+};
+
+const handleGoogleStart = async (request, env) => {
+  const clientId = typeof env.GOOGLE_CLIENT_ID === "string" ? env.GOOGLE_CLIENT_ID.trim() : "";
+  if (!clientId) return json({ error: "Google login is not configured.", message: "GOOGLE_CLIENT_ID aur GOOGLE_CLIENT_SECRET add karein." }, 503);
+  const state = randomToken(24);
+  const origin = new URL(request.url).origin;
+  const redirectUri = typeof env.GOOGLE_REDIRECT_URI === "string" && env.GOOGLE_REDIRECT_URI.trim() ? env.GOOGLE_REDIRECT_URI.trim() : `${origin}/api/auth/google/callback`;
+  const target = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  target.searchParams.set("client_id", clientId);
+  target.searchParams.set("redirect_uri", redirectUri);
+  target.searchParams.set("response_type", "code");
+  target.searchParams.set("scope", "openid email profile");
+  target.searchParams.set("state", state);
+  target.searchParams.set("prompt", "select_account");
+  return new Response(null, { status: 302, headers: { Location: target.toString(), "Set-Cookie": authTokenCookie("__Host-shazan_oauth_state", state) } });
+};
+
+const handleGoogleCallback = async (request, env, db) => {
+  const url = new URL(request.url);
+  const state = url.searchParams.get("state") || "";
+  const expected = parseCookies(request).get("__Host-shazan_oauth_state") || "";
+  const code = url.searchParams.get("code") || "";
+  if (!state || !expected || !safeEqual(state, expected) || !code) return json({ error: "Google OAuth state invalid." }, 400);
+  const clientId = typeof env.GOOGLE_CLIENT_ID === "string" ? env.GOOGLE_CLIENT_ID.trim() : "";
+  const clientSecret = typeof env.GOOGLE_CLIENT_SECRET === "string" ? env.GOOGLE_CLIENT_SECRET.trim() : "";
+  const redirectUri = typeof env.GOOGLE_REDIRECT_URI === "string" && env.GOOGLE_REDIRECT_URI.trim() ? env.GOOGLE_REDIRECT_URI.trim() : `${url.origin}/api/auth/google/callback`;
+  if (!clientId || !clientSecret) return json({ error: "Google OAuth secrets missing." }, 503);
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }) });
+  const tokenPayload = await readJson(tokenResponse);
+  if (!tokenResponse.ok || typeof tokenPayload.access_token !== "string") return json({ error: "Google token exchange failed." }, 502);
+  const userResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", { headers: { Authorization: `Bearer ${tokenPayload.access_token}` } });
+  const profile = await readJson(userResponse);
+  const email = normalizeEmail(profile.email);
+  const subject = typeof profile.sub === "string" ? profile.sub : "";
+  const displayName = normalizeDisplayName(profile.name || email.split("@")[0]);
+  if (!userResponse.ok || !subject || !validEmail(email) || !validDisplayName(displayName)) return json({ error: "Google profile invalid." }, 502);
+  let user = await db.prepare(`SELECT u.id,u.email,u.display_name,COALESCE(p.role,u.role) AS role,COALESCE(w.available,u.credits) AS credits
+    FROM shazan_auth_identities_v1 i JOIN shazan_auth_users_v2 u ON u.id=i.user_id LEFT JOIN shazan_user_profiles_v1 p ON p.user_id=u.id LEFT JOIN shazan_credit_wallets_v1 w ON w.user_id=u.id
+    WHERE i.provider='google' AND i.provider_subject=? LIMIT 1`).bind(subject).first();
+  const current = nowSeconds();
+  if (!user) {
+    user = await db.prepare("SELECT id,email,display_name,role,credits FROM shazan_auth_users_v2 WHERE email=? LIMIT 1").bind(email).first();
+    const userId = user?.id || crypto.randomUUID();
+    const statements = [];
+    if (!user) {
+      statements.push(db.prepare(`INSERT INTO shazan_auth_users_v2(id,email,display_name,password_hash,password_salt,role,status,credits,email_verified,created_at,updated_at)
+        VALUES(?,?,?,'oauth_only','oauth_only','user','active',500,1,?,?)`).bind(userId, email, displayName, current, current));
+      statements.push(db.prepare("INSERT INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,'user',?,?)").bind(userId, current, current));
+      statements.push(db.prepare("INSERT INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,500,0,0,?)").bind(userId, current));
+      statements.push(db.prepare(`INSERT INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
+        VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account demo credits',?)`).bind(crypto.randomUUID(), userId, userId, current));
+    } else {
+      statements.push(db.prepare("UPDATE shazan_auth_users_v2 SET email_verified=1,updated_at=? WHERE id=?").bind(current, userId));
+    }
+    statements.push(db.prepare("INSERT OR IGNORE INTO shazan_auth_identities_v1(id,user_id,provider,provider_subject,created_at) VALUES(?,?,'google',?,?)").bind(crypto.randomUUID(), userId, subject, current));
+    await db.batch(statements);
+    user = await db.prepare(`SELECT u.id,u.email,u.display_name,COALESCE(p.role,u.role) AS role,COALESCE(w.available,u.credits) AS credits
+      FROM shazan_auth_users_v2 u LEFT JOIN shazan_user_profiles_v1 p ON p.user_id=u.id LEFT JOIN shazan_credit_wallets_v1 w ON w.user_id=u.id WHERE u.id=? LIMIT 1`).bind(userId).first();
+  }
+  const token = await createSession(db, user.id);
+  const headers = new Headers({ Location: `${url.origin}/studio` });
+  headers.append("Set-Cookie", sessionCookie(token));
+  headers.append("Set-Cookie", authTokenCookie("__Host-shazan_oauth_state", "", 0));
+  return new Response(null, { status: 302, headers });
+};
+
 const handleAuth = async (request, env, pathname) => {
   try {
     const runtime = await getAuthRuntime(env);
@@ -747,6 +923,12 @@ const handleAuth = async (request, env, pathname) => {
     if (pathname === "/api/auth/register" && request.method === "POST") return handleAuthRegister(request, runtime.db, runtime.pepper);
     if (pathname === "/api/auth/login" && request.method === "POST") return handleAuthLogin(request, runtime.db, runtime.pepper);
     if (pathname === "/api/auth/logout" && request.method === "POST") return handleAuthLogout(request, runtime.db);
+    if (pathname === "/api/auth/verification/send" && request.method === "POST") return handleVerificationSend(request, env, runtime.db);
+    if (pathname === "/api/auth/verification/confirm" && request.method === "GET") return handleVerificationConfirm(request, runtime.db);
+    if (pathname === "/api/auth/password/forgot" && request.method === "POST") return handlePasswordForgot(request, env, runtime.db);
+    if (pathname === "/api/auth/password/reset" && request.method === "POST") return handlePasswordReset(request, env, runtime.db, runtime.pepper);
+    if (pathname === "/api/auth/google/start" && request.method === "GET") return handleGoogleStart(request, env);
+    if (pathname === "/api/auth/google/callback" && request.method === "GET") return handleGoogleCallback(request, env, runtime.db);
     return json({ error: "Auth route not found." }, 404);
   } catch {
     return json({
@@ -1146,7 +1328,25 @@ const worker = {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/auth" || pathname.startsWith("/api/auth/")) return handleAuth(request, env, pathname);
+    if (pathname === "/api/v1" || pathname.startsWith("/api/v1/")) return handleWorkflowApi(request, env, pathname, {
+      json,
+      getSession,
+      sameOriginMutationError,
+    });
     if (pathname === "/api/studio" || pathname.startsWith("/api/studio/")) return handleStudio(request, env, pathname);
+    const studioRoute = pathname === "/studio" || pathname === "/studio.html" || pathname.startsWith("/studio/");
+    const adminRoute = pathname === "/admin" || pathname === "/admin.html" || pathname.startsWith("/admin/");
+    if (studioRoute || adminRoute) {
+      const runtime = await getAuthRuntime(env);
+      if (runtime.error) return runtime.error;
+      await ensureWorkflowSchema(env.DB);
+      const session = await getSession(request, env.DB);
+      if (!session) return Response.redirect(`${new URL(request.url).origin}/?auth=login&next=${encodeURIComponent(pathname)}`, 302);
+      if (adminRoute) {
+        const profile = await env.DB.prepare("SELECT role FROM shazan_user_profiles_v1 WHERE user_id=? LIMIT 1").bind(session.row.id).first();
+        if (profile?.role !== "admin") return json({ error: "Admin authorization required." }, 403);
+      }
+    }
     if (!env.ASSETS?.fetch) return json({ error: "Static assets binding missing." }, 500);
     return env.ASSETS.fetch(request);
   },

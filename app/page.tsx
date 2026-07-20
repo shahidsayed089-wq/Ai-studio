@@ -25,7 +25,7 @@ type AuthUser = {
   id: string;
   email: string;
   name: string;
-  role: "user" | "admin";
+  role: "user" | "creator" | "admin";
   credits: number;
 };
 type IconName =
@@ -486,7 +486,7 @@ export default function Home() {
   const [creditNativeAudio, setCreditNativeAudio] = useState(true);
   const [references, setReferences] = useState<ReferenceFiles>(emptyReferences);
   const [videoGeneratorOpen, setVideoGeneratorOpen] = useState(false);
-  const [studioAccessCode, setStudioAccessCode] = useState("");
+  const [studioAccessCode] = useState("");
   const [generatorStatus, setGeneratorStatus] = useState<GeneratorStatus>("ready");
   const [generatorMessage, setGeneratorMessage] = useState("Ready for a secure SHAZAN render.");
   const [generatorVideoUrl, setGeneratorVideoUrl] = useState("");
@@ -510,8 +510,19 @@ export default function Home() {
   const [accountOpen, setAccountOpen] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const generatorRunRef = useRef(0);
+  const authNextRef = useRef("");
 
   useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    const requestedAuth = parameters.get("auth");
+    const requestedNext = parameters.get("next") || "";
+    authNextRef.current = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "";
+    if (requestedAuth === "login" || requestedAuth === "register") {
+      window.setTimeout(() => {
+        setAuthView(requestedAuth);
+        setAuthOpen(true);
+      }, 0);
+    }
     let active = true;
     void fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" })
       .then(async (response) => {
@@ -702,6 +713,18 @@ export default function Home() {
       return;
     }
 
+    const studioUrl = `/studio?mode=${encodeURIComponent(activeMode)}&model=${encodeURIComponent(model)}&prompt=${encodeURIComponent(cleanPrompt)}`;
+    if (!authUser) {
+      authNextRef.current = studioUrl;
+      openAuth("login");
+      setGeneratorMessage("Credit-protected workflow ke liye pehle sign in karein.");
+      return;
+    }
+    setGeneratorStatus("queued");
+    setGeneratorMessage("SHAZAN Workflow Studio open ho raha hai—credits wahin atomically reserve honge.");
+    window.location.assign(studioUrl);
+    if (window.location.href) return;
+
     if (model.startsWith("Seedance 2.0") && references.audio.length > 0 && references.images.length + references.videos.length === 0) {
       setGeneratorStatus("failed");
       setGeneratorMessage("Seedance audio reference ke saath kam se kam ek image ya video reference bhi chahiye.");
@@ -814,11 +837,11 @@ export default function Home() {
       if (generatorRunRef.current !== runId) return;
 
       let responseRecord = payload as Record<string, unknown>;
-      const requestId = typeof responseRecord.request_id === "string" ? responseRecord.request_id : "";
+      const requestId = typeof responseRecord.request_id === "string" ? String(responseRecord.request_id) : "";
       if (requestId) setGeneratorRequestId(requestId);
 
       for (let attempt = 0; attempt < 120; attempt += 1) {
-        const status = typeof responseRecord.status === "string" ? responseRecord.status.toLowerCase() : "queued";
+        const status = typeof responseRecord.status === "string" ? String(responseRecord.status).toLowerCase() : "queued";
         const media = extractMedia(payload);
         if (status === "completed" && media) {
           setGeneratorVideoUrl(media.url);
@@ -890,6 +913,7 @@ export default function Home() {
       setAuthPassword("");
       setAuthConfirm("");
       setAuthOpen(false);
+      if (authNextRef.current) window.location.assign(authNextRef.current);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Account service unavailable hai.");
     } finally {
@@ -944,6 +968,8 @@ export default function Home() {
                   <b>{authUser.name}</b>
                   <span>{authUser.email}</span>
                   <div><span>Available credits</span><strong>{authUser.credits}</strong></div>
+                  <a className="account-studio-link" href="/studio">Open Workflow Studio <Icon name="arrow" size={15} /></a>
+                  {authUser.role === "admin" && <a className="account-admin-link" href="/admin">Admin dashboard <Icon name="sliders" size={15} /></a>}
                   <button onClick={logout}>Sign out <Icon name="arrow" size={15} /></button>
                 </div>
               )}
@@ -995,6 +1021,11 @@ export default function Home() {
                 <button className={authView === "register" ? "active" : ""} onClick={() => { setAuthView("register"); setAuthError(""); }} role="tab" aria-selected={authView === "register"}>Register</button>
               </div>
 
+              <a className="google-auth-button" href="/api/auth/google/start">
+                <span aria-hidden="true">G</span> Continue with Google
+              </a>
+              <div className="auth-divider"><span>or use email</span></div>
+
               <form onSubmit={submitAuth}>
                 {authView === "register" && (
                   <label><span>Full name</span><input value={authName} onChange={(event) => setAuthName(event.target.value)} autoComplete="name" maxLength={40} required placeholder="Your name" /></label>
@@ -1018,6 +1049,7 @@ export default function Home() {
                   {authSubmitting ? "Please wait…" : authView === "login" ? "Secure sign in" : "Create account"}
                 </button>
               </form>
+              {authView === "login" && <a className="auth-forgot" href="/reset">Forgot password?</a>}
               <small className="auth-security-note">Passwords raw form mein store nahi hote. Secure hashing aur private server session use hota hai.</small>
               <button className="auth-switch" onClick={() => { setAuthView(authView === "login" ? "register" : "login"); setAuthError(""); }}>
                 {authView === "login" ? "New to SHAZAN? Create an account" : "Already registered? Sign in"}
@@ -1258,17 +1290,10 @@ export default function Home() {
                   {referenceTotal > 0 && <p>{[...references.images, ...references.videos, ...references.audio].map((file) => file.name).join(" · ")}</p>}
                 </div>
 
-                <label className="generator-access-code">
-                  <span>Owner access code</span>
-                  <input
-                    type="password"
-                    value={studioAccessCode}
-                    onChange={(event) => setStudioAccessCode(event.target.value)}
-                    autoComplete="current-password"
-                    placeholder="Cloudflare STUDIO_ACCESS_CODE"
-                  />
-                  <small>Credits wallet launch hone tak paid renders owner-only hain.</small>
-                </label>
+                <div className="generator-input-summary">
+                  <span><Icon name="cube" size={17} /><b>Credit-protected generation</b></span>
+                  <small>Generate dabane par secure Workflow Studio khulega. Job start par estimate reserve, success par once charge, aur permanent failure/cancel par automatic refund hota hai.</small>
+                </div>
 
                 {generatorStatus !== "ready" && (
                   <div className={`generator-api-notice status-${generatorStatus}`} role="status">

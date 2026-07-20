@@ -1,85 +1,144 @@
-# SHAZAN AI Studio
+# SHAZAN AI Workflow Studio
 
-Premium multi-model generative AI studio built with Next.js static export and Cloudflare Pages Advanced Mode.
+Production-oriented visual AI workflow application built on Next.js static export, Cloudflare Pages Advanced Mode, D1, R2 and an optional Cloudflare Queue consumer.
 
-The public product and UI remain SHAZAN AI. A server-side Cloudflare Worker routes paid requests without exposing provider tokens or sending users to an external provider login.
+The launch-safe provider is **SHAZAN Mock Provider**: it executes the complete persistent workflow, SSE progress, R2 export and atomic credit lifecycle without spending paid API balance. Live fal/Kie/OpenAI/Google/xAI/HeyGen adapters remain server-side and must be enabled only after their queue consumer and pricing have passed staging.
+
+## What works
+
+- Visual drag/connect canvas for Text Prompt, Image Upload, Image Generator, Image-to-Video, Text-to-Video, Video Upscaler, Result Preview and Download/Export.
+- Email/password and Google OAuth, HttpOnly D1 sessions, verification and password reset.
+- User, creator and admin roles with protected `/studio` and `/admin` routes.
+- Project CRUD, duplicate, auto-save with optimistic conflict detection, version restore and expiring read-only shares.
+- Validated R2 uploads and durable generated assets.
+- D1-persistent async jobs, SSE progress, cancel, retry, automatic exponential backoff and idempotency keys.
+- Atomic 500-credit signup grant, reservation, exactly-once charge, refund and complete ledger.
+- Admin metrics, user status/role, mandatory-reason credit adjustment, provider switches and audit logs.
+- Webhook event deduplication and health endpoint.
+
+## Architecture
+
+```text
+Browser
+  ├─ static UI ────────────────────────────── Cloudflare Pages
+  └─ /api/* ─ Pages Advanced Mode Worker
+                ├─ D1: users, sessions, projects, jobs, credits, audit
+                ├─ R2: uploads and generated exports
+                ├─ Queue producer (optional)
+                └─ Provider adapter registry (secrets remain server-side)
+                         │
+                         └─ Cloudflare Queue consumer + cron fallback
+```
+
+`public/_worker.js` is copied to `out/_worker.js`. `public/workflow-api.js` contains the ownership-enforced API and D1 job state machine. `worker/queue-consumer.js` is the optional independent Queue consumer. Without the Queue binding, Mock jobs still persist in D1 and advance safely through status/SSE requests.
 
 ## Local development
 
-Requirements: Node.js 22.13 or newer.
+Requires Node.js 22.13+.
 
 ```bash
 npm ci
+cp .dev.vars.example .dev.vars
 npm run dev
 ```
 
-Copy `.dev.vars.example` to `.dev.vars` for local secrets. `.dev.vars` is ignored by Git.
-
-## Quality checks
+Build and automated verification:
 
 ```bash
 npm run lint
+npm test
 npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
-## Deploy to Cloudflare Pages
+`npm test` runs domain and Miniflare integration tests. The integration suite uses real D1/R2 emulation and verifies authentication, IDOR protection, version persistence, simultaneous-tab deduplication, credit reservation/charge/refund, duplicate webhook handling, admin authorization, cancel/retry and durable download. Playwright refreshes the page while the Mock job is processing and checks the charge occurs exactly once.
 
-The production build generates the static website in `out`. Next.js also copies `public/_worker.js` to `out/_worker.js`; Cloudflare Pages runs it in Advanced Mode for the private `/api/studio/*` bridge and `/api/auth/*` account service.
+## Database
 
-For the existing `ai-studio-1n1` project:
+- `migrations/0001_auth.sql` — auth users, sessions and rate limits.
+- `migrations/0002_workflow_studio.sql` — profiles, wallets, ledger, projects, versions, shares, assets, jobs, events, providers, webhooks, audits and atomic credit triggers.
+
+Apply locally:
+
+```bash
+npx wrangler d1 migrations apply ai-studio-wallet --local
+```
+
+Apply to production during a maintenance window:
+
+```bash
+npx wrangler d1 migrations apply ai-studio-wallet --remote
+```
+
+The Worker also uses idempotent runtime schema checks so a missing table produces a recoverable initialization instead of exposing provider keys or corrupting a wallet.
+
+## Demo seed
+
+The seed command creates one verified demo creator, one verified admin and a sample Prompt → Image → Video → Upscaler → Export project. Passwords are read from environment and never committed.
+
+```bash
+AUTH_PEPPER='same-as-target-environment' \
+DEMO_USER_PASSWORD='strong-private-password' \
+DEMO_ADMIN_PASSWORD='another-private-password' \
+npm run seed:demo -- --remote
+```
+
+Optional emails: `DEMO_USER_EMAIL` and `DEMO_ADMIN_EMAIL`. Do not use published/default passwords in production.
+
+## Cloudflare Pages deployment
+
+Existing project settings:
 
 - Production branch: `main`
 - Build command: `npm run build`
-- Build output directory: `out`
-- Node version: `22`
+- Output directory: `out`
+- Node.js: `22`
+- `DB` → D1 `ai-studio-wallet`
+- `MEDIA` → R2 `ai-studio-media`
 
-Add encrypted secrets under **Workers & Pages → ai-studio-1n1 → Settings → Variables and Secrets** for Production and Preview:
+The production bindings live in `wrangler.jsonc`; dashboard controls can appear read-only because repository configuration is authoritative. Do not create a second `DB` binding.
 
-- `FAL_KEY` — primary private token for fal.ai queue and file storage
-- `OPENAI_API_KEY` — private OpenAI Speech API token for GPT Voice
-- `STUDIO_ACCESS_CODE` — temporary owner gate until user wallets are ready
-- `KIE_API_KEY` — optional fallback for models that are only connected through Kie
-- `AUTH_PEPPER` — random 32+ character password-hashing secret; keep it stable and encrypted
+Required encrypted secrets:
 
-The production `DB` D1 and `MEDIA` R2 bindings are pinned in `wrangler.jsonc`; that file is the Pages configuration source of truth. The Worker safely creates the required auth tables on first request, and the versioned schema is also in `migrations/0001_auth.sql`.
+- `AUTH_PEPPER` — stable random 32+ character password pepper.
+- `WEBHOOK_SECRET` — stable random 32+ character provider webhook secret.
 
-Never commit API keys, paste them into client code, or expose them through `NEXT_PUBLIC_` variables.
+Authentication integrations:
 
-## Secure accounts
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, optional `GOOGLE_REDIRECT_URI`.
+- `RESEND_API_KEY`, `AUTH_EMAIL_FROM` for verification/reset delivery.
 
-SHAZAN login/register uses D1-backed users, PBKDF2-SHA256 password hashing with a private pepper, opaque server sessions, hashed session tokens and a `Secure`, `HttpOnly`, `SameSite=Lax` cookie. Login attempts are rate-limited and authentication errors do not disclose whether an account exists.
+Live provider secrets (server only):
 
-Routes:
+- `FAL_KEY`, `KIE_API_KEY`, `OPENAI_API_KEY`.
 
-- `POST /api/auth/register` — validates name, email and a strong 12+ character password, then creates a session.
-- `POST /api/auth/login` — verifies the password and creates a fresh 30-day session.
-- `GET /api/auth/session` — restores the signed-in user without exposing secrets.
-- `POST /api/auth/logout` — revokes the stored session and clears the cookie.
+The legacy landing generator remains owner-locked by `STUDIO_ACCESS_CODE`; public model cards transfer their prompt/model into the credit-protected Workflow Studio and do not call the legacy paid route.
 
-New accounts start with `0` credits. Paid generation remains owner-gated until credit purchase and atomic debit logic are connected.
+Never use a `NEXT_PUBLIC_` name for these values and never paste secrets into browser code, GitHub, screenshots or client logs.
 
-## Connected models
+## Optional Cloudflare Queue consumer
 
-The bridge currently has verified fal.ai request mappings for:
+Create `shazan-workflow-jobs` and `shazan-workflow-jobs-dlq`, add a Pages producer binding named `WORKFLOW_QUEUE`, then deploy:
 
-- GPT Image 2, Nano Banana 2 / Pro, Grok Imagine Image and FLUX 2 Pro
-- Seedance 2.0 Standard / Fast, with text, image and reference workflows selected from actual inputs
-- Gemini Omni Flash — text-to-video or image-reference-to-video
-- Grok Imagine Video 1.5 — exact image-to-video endpoint
-- Kling 3.0 Pro and Kling 3.0 Omni 4K
-- Veo 3.1 and HappyHorse 1.1
-- Lyria 3, AudioFlow, Suno and Score Composer
-- GPT Voice, ElevenLabs, Voice Forge and Multilingual Pro
-- HeyGen Avatar IV, Avatar One, Digital Twin and Performance Capture
+```bash
+npx wrangler deploy --config wrangler.queue.jsonc
+```
 
-Kie remains an optional fallback for Seedance 2.0 Mini and Kling 3.0 Elements, and powers the separate exact Suno music route.
+The consumer retries with delayed exponential backoff and a minute cron fallback. D1 is always the source of truth, so Queue delivery is at-least-once while charging remains exactly-once through unique ledger keys and database triggers.
 
-AudioFlow, Avatar One, Digital Twin, Performance Capture and Score Composer are SHAZAN workflow names backed by capability-matched server-side provider routes. Udio is not shown as connected because an exact official fal.ai endpoint has not been verified.
+## API overview
 
-Avatar inputs stay model-specific: HeyGen Avatar IV accepts a clear-face photo plus script or optional audio; Avatar One and Digital Twin require an image plus voice audio; Performance Capture requires a character image plus a driving-performance video.
+- `GET /api/v1/health`
+- `/api/auth/register`, `/login`, `/logout`, `/session`
+- `/api/auth/verification/send`, `/verification/confirm`
+- `/api/auth/password/forgot`, `/password/reset`
+- `/api/auth/google/start`, `/google/callback`
+- `/api/v1/projects/*`, `/versions/*`, `/share`
+- `/api/v1/assets/*`
+- `/api/v1/jobs/*`, `/events`, `/cancel`, `/retry`
+- `/api/v1/credits`
+- `/api/v1/admin/metrics`, `/users`, `/providers`, `/audit`
+- `/api/v1/webhooks/:provider`
 
-GPT Voice uses OpenAI's request-based Speech API because the current UI generates a bounded MP3, not a two-way realtime conversation. The interface discloses that voice output is AI-generated. Voice Forge is a SHAZAN voice-design workflow; ElevenLabs and Multilingual Pro use verified fal.ai TTS routes.
-
-## Public-launch safety
-
-Paid generation is owner-gated by default. Do not set `STUDIO_ALLOW_PUBLIC=true` until the per-user credit purchase, atomic debit, quotas and abuse controls are live.
+Every private project, job and asset query includes the authenticated owner ID. Mutations reject cross-site origins. Auth and generation paths are rate-limited, uploads are MIME/signature/size checked, filenames are sanitized and all provider secrets stay in Worker bindings.

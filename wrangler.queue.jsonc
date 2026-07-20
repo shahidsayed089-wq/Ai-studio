@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "shazan-ai-queue-consumer",
+  "main": "./worker/queue-consumer.js",
+  "compatibility_date": "2026-07-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-studio-wallet",
+      "database_id": "6c50fd4a-b267-40ac-99dc-c0c47be64e18"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "ai-studio-media"
+    }
+  ],
+  "queues": {
+    "producers": [{ "binding": "WORKFLOW_QUEUE", "queue": "shazan-workflow-jobs" }],
+    "consumers": [{ "queue": "shazan-workflow-jobs", "max_batch_size": 10, "max_retries": 8, "dead_letter_queue": "shazan-workflow-jobs-dlq" }]
+  },
+  "triggers": { "crons": ["* * * * *"] }
+}
