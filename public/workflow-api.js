@@ -415,6 +415,46 @@ const defaultWorkflow = () => ({
   ],
 });
 
+const quickCreationWorkflow = ({ mode, model, prompt, aspectRatio, resolution, duration, referenceAssets }) => {
+  const safeMode = ["image", "video", "music", "voice", "avatar"].includes(mode) ? mode : "image";
+  const firstImage = referenceAssets.find((asset) => asset.kind === "image");
+  const generatorType = safeMode === "video" ? (firstImage ? "image_to_video" : "text_to_video") : "image_generator";
+  const outputKind = generatorType === "image_generator" ? "image" : "video";
+  const generatorId = `${safeMode}-generator`;
+  const nodes = [
+    { id: "prompt", type: "text_prompt", position: { x: 80, y: 160 }, data: { prompt } },
+  ];
+  const edges = [];
+  if (firstImage) {
+    nodes.push({ id: "reference", type: "image_upload", position: { x: 80, y: 320 }, data: { asset_id: firstImage.id, filename: firstImage.filename } });
+    edges.push({ id: "reference-to-generator", source: "reference", target: generatorId, kind: "image" });
+  }
+  nodes.push(
+    {
+      id: generatorId,
+      type: generatorType,
+      position: { x: 390, y: 160 },
+      data: {
+        model,
+        medium: safeMode,
+        aspect_ratio: aspectRatio,
+        resolution,
+        duration,
+        reference_asset_ids: referenceAssets.map((asset) => asset.id).join(","),
+        demo: true,
+      },
+    },
+    { id: "output", type: "result_preview", position: { x: 690, y: 160 }, data: { label: "Demo Output" } },
+    { id: "export", type: "download_export", position: { x: 970, y: 160 }, data: { format: "json", demo: true } },
+  );
+  edges.push(
+    { id: "prompt-to-generator", source: "prompt", target: generatorId, kind: "text" },
+    { id: "generator-to-output", source: generatorId, target: "output", kind: outputKind },
+    { id: "output-to-export", source: "output", target: "export", kind: outputKind },
+  );
+  return { nodes, edges };
+};
+
 const listProjects = async (request, env, ctx, actor) => {
   const url = new URL(request.url);
   const { page, limit } = safePagination(url.searchParams);
@@ -571,7 +611,7 @@ const getSharedProject = async (env, ctx, token) => {
 };
 
 const assetKind = (contentType) => contentType.startsWith("image/") ? "image" : contentType.startsWith("video/") ? "video" : "file";
-const allowedUploadType = (value) => new Set(["image/jpeg","image/png","image/webp","image/gif","video/mp4","video/webm","video/quicktime"]).has(value);
+const allowedUploadType = (value) => new Set(["image/jpeg","image/png","image/webp","image/gif","video/mp4","video/webm","video/quicktime","audio/mpeg","audio/wav","audio/mp4","audio/x-m4a","audio/aac"]).has(value);
 const magicMatches = (bytes, type) => {
   const view = new Uint8Array(bytes.slice(0, 16));
   if (type === "image/png") return view[0] === 0x89 && view[1] === 0x50 && view[2] === 0x4e && view[3] === 0x47;
@@ -579,6 +619,10 @@ const magicMatches = (bytes, type) => {
   if (type === "image/gif") return String.fromCharCode(...view.slice(0, 3)) === "GIF";
   if (type === "image/webp") return String.fromCharCode(...view.slice(0, 4)) === "RIFF" && String.fromCharCode(...view.slice(8, 12)) === "WEBP";
   if (type.startsWith("video/")) return String.fromCharCode(...view.slice(4, 8)) === "ftyp" || (type === "video/webm" && view[0] === 0x1a && view[1] === 0x45 && view[2] === 0xdf && view[3] === 0xa3);
+  if (type === "audio/mpeg") return String.fromCharCode(...view.slice(0, 3)) === "ID3" || (view[0] === 0xff && (view[1] & 0xe0) === 0xe0);
+  if (type === "audio/wav") return String.fromCharCode(...view.slice(0, 4)) === "RIFF" && String.fromCharCode(...view.slice(8, 12)) === "WAVE";
+  if (type === "audio/mp4" || type === "audio/x-m4a") return String.fromCharCode(...view.slice(4, 8)) === "ftyp";
+  if (type === "audio/aac") return view[0] === 0xff && (view[1] & 0xf6) === 0xf0;
   return false;
 };
 
@@ -714,6 +758,63 @@ const createWorkflowRun = async (request, env, ctx, actor, projectId) => {
   }
   const row = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? LIMIT 1").bind(jobId).first();
   return ctx.json({ job: jobView(row), cost: { credits: cost.credits, breakdown: cost.breakdown } }, 202);
+};
+
+const createQuickCreation = async (request, env, ctx, actor) => {
+  const body = await readBody(request, ctx);
+  if (body.error) return body.error;
+  const mode = clean(body.value.mode, 20).toLowerCase();
+  const model = clean(body.value.model, 120);
+  const prompt = clean(body.value.prompt, 5000);
+  const aspectRatio = clean(body.value.aspect_ratio, 20) || "16:9";
+  const resolution = clean(body.value.resolution, 20) || "720p";
+  const duration = Math.min(180, Math.max(1, Math.trunc(Number(body.value.duration) || 5)));
+  if (!["image", "video", "music", "voice", "avatar"].includes(mode)) return apiError(ctx, 400, "Invalid creation mode");
+  if (!model || prompt.length < 2) return apiError(ctx, 400, "Model and prompt required");
+
+  const idempotencyKey = clean(request.headers.get("Idempotency-Key") || body.value.idempotency_key, 120);
+  if (!/^[a-zA-Z0-9_.:-]{12,120}$/.test(idempotencyKey)) return apiError(ctx, 400, "Idempotency-Key header required");
+  const duplicate = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE user_id=? AND idempotency_key=? LIMIT 1").bind(actor.id, idempotencyKey).first();
+  if (duplicate) {
+    const existingProject = await ownedProject(env.DB, duplicate.project_id, actor.id);
+    return ctx.json({ job: jobView(duplicate), project: existingProject ? publicProject(existingProject) : null, duplicate: true });
+  }
+
+  const requestedIds = Array.isArray(body.value.reference_asset_ids)
+    ? [...new Set(body.value.reference_asset_ids.map((value) => clean(value, 80)).filter(Boolean))].slice(0, 15)
+    : [];
+  let referenceAssets = [];
+  if (requestedIds.length) {
+    const placeholders = requestedIds.map(() => "?").join(",");
+    const result = await env.DB.prepare(`SELECT id,kind,filename FROM shazan_assets_v1 WHERE owner_id=? AND deleted_at IS NULL AND id IN (${placeholders})`).bind(actor.id, ...requestedIds).all();
+    referenceAssets = result.results || [];
+    if (referenceAssets.length !== requestedIds.length) return apiError(ctx, 404, "Reference asset not found");
+  }
+
+  const workflow = quickCreationWorkflow({ mode, model, prompt, aspectRatio, resolution, duration, referenceAssets });
+  const validation = validateWorkflow(workflow);
+  if (!validation.ok) return apiError(ctx, 400, "Invalid quick creation", validation.error);
+  const canonical = canonicalWorkflow(validation.workflow);
+  const workflowHash = await sha256(canonical);
+  const projectId = id();
+  const versionId = id();
+  const timestamp = now();
+  const title = `${mode[0].toUpperCase()}${mode.slice(1)} · ${prompt}`.slice(0, 80);
+  const statements = [
+    env.DB.prepare(`INSERT INTO shazan_projects_v1(id,owner_id,name,description,workflow_json,workflow_hash,current_version,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,1,?,?)`).bind(projectId, actor.id, title, "Created in SHAZAN AI Studio", canonical, workflowHash, timestamp, timestamp),
+    env.DB.prepare(`INSERT INTO shazan_project_versions_v1(id,project_id,version_number,workflow_json,workflow_hash,reason,created_by,created_at)
+      VALUES(?,?,1,?,?,?,?,?)`).bind(versionId, projectId, canonical, workflowHash, "Created by simple Studio", actor.id, timestamp),
+    ...requestedIds.map((assetId) => env.DB.prepare("UPDATE shazan_assets_v1 SET project_id=? WHERE id=? AND owner_id=? AND deleted_at IS NULL").bind(projectId, assetId, actor.id)),
+  ];
+  await env.DB.batch(statements);
+
+  const runHeaders = new Headers({ "Content-Type": "application/json", "Idempotency-Key": idempotencyKey });
+  const runRequest = new Request(request.url, { method: "POST", headers: runHeaders, body: JSON.stringify({ provider: "mock", idempotency_key: idempotencyKey }) });
+  const runResponse = await createWorkflowRun(runRequest, env, ctx, actor, projectId);
+  const runPayload = await runResponse.json().catch(() => ({}));
+  const project = { id: projectId, name: title, description: "Created in SHAZAN AI Studio", workflow: validation.workflow, version: 1, created_at: timestamp, updated_at: timestamp };
+  return ctx.json({ ...runPayload, project }, runResponse.status);
 };
 
 const mockShouldFail = (job) => /\[fail\]/i.test(job.workflow_json);
@@ -1210,6 +1311,7 @@ export const handleWorkflowApi = async (request, env, pathname, ctx) => {
 
     if (segments[0] === "providers" && request.method === "GET") return listProviders(env, ctx);
     if (segments[0] === "credits" && request.method === "GET") return getCredits(request, env, ctx, actor);
+    if (segments[0] === "creations" && segments.length === 1 && request.method === "POST") return createQuickCreation(request, env, ctx, actor);
     if (segments[0] === "projects" && segments.length === 1) {
       if (request.method === "GET") return listProjects(request, env, ctx, actor);
       if (request.method === "POST") return createProject(request, env, ctx, actor);
