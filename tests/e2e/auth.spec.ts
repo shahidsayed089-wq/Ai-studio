@@ -15,12 +15,18 @@ test("registration, login and logout use durable server sessions", async () => {
 
 test("Google OAuth start sets state and callback rejects invalid state", async () => {
   const api = await newApi("google-oauth-contract");
-  const start = await call(api, "/api/auth/google/start");
+  const start = await call(api, "/api/auth/google/start?returnTo=%2Fadvanced%2Fcanvas");
   expect(start.status()).toBe(302);
   const target = new URL(start.headers().location);
   expect(target.origin).toBe("https://accounts.google.com");
   expect(target.searchParams.get("redirect_uri")).toBe(`${BASE_URL}/api/auth/google/callback`);
-  expect(start.headers()["set-cookie"]).toContain("shazan_oauth_state");
+  const cookies = start
+    .headersArray()
+    .filter(({ name }) => name.toLowerCase() === "set-cookie")
+    .map(({ value }) => value)
+    .join("\n");
+  expect(cookies).toContain("shazan_oauth_state");
+  expect(cookies).toContain("shazan_oauth_return");
   const invalid = await call(api, "/api/auth/google/callback?state=wrong&code=fake");
   expect(invalid.status()).toBe(400);
   await api.dispose();
