@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 
 test("account to durable Prompt → Image → Video → Upscaler → Export workflow", async ({ page }) => {
   const email = `playwright-${Date.now()}@example.com`;
-  await page.goto("/?auth=register&next=/studio");
+  await page.goto("/?auth=register&next=/advanced/canvas");
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("Full name").fill("Playwright Creator");
   await page.getByLabel("Email address").fill(email);
@@ -11,7 +11,8 @@ test("account to durable Prompt → Image → Video → Upscaler → Export work
   await page.getByLabel("Confirm password").fill("LaunchReady!2026");
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(/\/studio$/);
+  await expect(page).toHaveURL(/\/advanced\/canvas$/);
+  await expect(page.getByText("PRO CANVAS — ADVANCED")).toBeVisible();
   await expect(page.getByText("Node library")).toBeVisible();
   await page.getByRole("button", { name: /New project/i }).click();
   await expect(page.locator(".canvas-node")).toHaveCount(4);
@@ -41,7 +42,7 @@ test("account to durable Prompt → Image → Video → Upscaler → Export work
   expect(await readFile(downloadPath!, "utf8")).toContain("SHAZAN AI Workflow Studio");
 });
 
-test("mobile navigation exposes node library and inspector", async ({ page }) => {
+test("mobile users receive the simple Studio without engineering controls", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const email = `mobile-${Date.now()}@example.com`;
   await page.goto("/?auth=register&next=/studio");
@@ -51,10 +52,9 @@ test("mobile navigation exposes node library and inspector", async ({ page }) =>
   await page.getByLabel("Confirm password").fill("MobileReady!2026");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/studio$/);
-  await page.locator(".studio-topbar .mobile-panel-button").first().click();
-  await expect(page.locator(".node-library")).toHaveClass(/open/);
-  await expect(page.locator(".node-library .library-node").filter({ hasText: "Text Prompt" })).toBeVisible();
-  await page.locator(".panel-heading button").first().click();
-  await page.locator(".canvas-node").first().click();
-  await expect(page.locator(".inspector-panel")).toHaveClass(/open/);
+  await expect(page.getByRole("heading", { name: /Imagine it.*Direct it.*Bring it to life/i })).toBeVisible();
+  await expect(page.getByText("Node library")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Run workflow/i })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open menu" }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveClass(/open/);
 });
