@@ -50,10 +50,10 @@ jobs:
         run: |
           set -euo pipefail
           if ! npx wrangler queues info shazan-workflow-jobs >/dev/null 2>&1; then
-            npx wrangler queues create shazan-workflow-jobs --message-retention-period-secs 345600
+            npx wrangler queues create shazan-workflow-jobs --message-retention-period-secs 86400
           fi
           if ! npx wrangler queues info shazan-workflow-jobs-dlq >/dev/null 2>&1; then
-            npx wrangler queues create shazan-workflow-jobs-dlq --message-retention-period-secs 345600
+            npx wrangler queues create shazan-workflow-jobs-dlq --message-retention-period-secs 86400
           fi
           npx wrangler queues info shazan-workflow-jobs
           npx wrangler queues info shazan-workflow-jobs-dlq
