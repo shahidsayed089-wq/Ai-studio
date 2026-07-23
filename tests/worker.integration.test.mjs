@@ -187,7 +187,7 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     const enableDemo = await request("/api/v1/admin/features/ENABLE_DEMO_PROVIDER", { method: "PATCH", cookie: admin.cookie, body: { enabled: true, reason: "Restore Demo Provider after gate test" } });
     assert.equal(enableDemo.status, 200);
     const paidProviderBlocked = await request("/api/v1/admin/providers/fal", { method: "PATCH", cookie: admin.cookie, body: { enabled: true, reason: "Verified fal.ai rollout provider switch" } });
-    assert.equal(paidProviderBlocked.status, 200);
+    assert.equal(paidProviderBlocked.status, 409);
     const adjustment = await json(await request(`/api/v1/admin/users/${owner.id}/credits`, { method: "POST", cookie: admin.cookie, body: { delta: 25, reason: "Launch support grant" } }));
     assert.equal(Number(adjustment.payload.wallet.available), 355);
     const removal = await json(await request(`/api/v1/admin/users/${owner.id}/credits`, { method: "POST", cookie: admin.cookie, body: { delta: -355, reason: "Verify strict zero-credit gate" } }));
