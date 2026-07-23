@@ -38,7 +38,7 @@ const WORKFLOW_SCHEMA = [
   )`,
   `CREATE TABLE IF NOT EXISTS shazan_credit_wallets_v1 (
     user_id TEXT PRIMARY KEY,
-    available INTEGER NOT NULL DEFAULT 500 CHECK(available >= 0),
+    available INTEGER NOT NULL DEFAULT 400 CHECK(available >= 0),
     reserved INTEGER NOT NULL DEFAULT 0 CHECK(reserved >= 0),
     spent INTEGER NOT NULL DEFAULT 0 CHECK(spent >= 0),
     updated_at INTEGER NOT NULL,
@@ -285,7 +285,7 @@ export const FEATURE_DEFAULTS = Object.freeze({
 });
 
 export const RELEASE_LOCKED_OFF = Object.freeze([
-  "ENABLE_LIVE_PAYMENTS", "ENABLE_COMMUNITY", "ENABLE_FAL", "ENABLE_KIE", "ENABLE_OPENAI",
+  "ENABLE_LIVE_PAYMENTS", "ENABLE_COMMUNITY", "ENABLE_KIE", "ENABLE_OPENAI",
   "ENABLE_GOOGLE_AI", "ENABLE_XAI", "ENABLE_HEYGEN", "ENABLE_RUNWAY", "ENABLE_MUAPI",
 ]);
 
@@ -300,6 +300,44 @@ const PROVIDER_FLAGS = Object.freeze({
   runway: "ENABLE_RUNWAY",
   muapi: "ENABLE_MUAPI",
 });
+
+const VERIFIED_LIVE_MODELS = Object.freeze({
+  nano_banana_2: { mode: "image", credits: 16 },
+  flux_2_pro: { mode: "image", credits: 8 },
+  seedance_2_0_standard: { mode: "video", creditsPerSecond: { "480p": 35, "720p": 35, "1080p": 79 } },
+  seedance_2_0_fast: { mode: "video", creditsPerSecond: { "480p": 28, "720p": 28 } },
+});
+
+const positiveIntegerEnv = (value, fallback, maximum = 1000000) => {
+  const parsed = Math.trunc(Number(value));
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(maximum, parsed) : fallback;
+};
+
+const estimateLiveCreationCredits = ({ mode, model, resolution, duration }) => {
+  const configuration = VERIFIED_LIVE_MODELS[model];
+  if (!configuration || configuration.mode !== mode) return { ok: false, error: "Selected model is not in the verified live launch allowlist." };
+  if (mode === "image") return { ok: true, credits: configuration.credits, breakdown: [{ model, credits: configuration.credits }] };
+  if (!Number.isInteger(duration) || duration < 4 || duration > 15) return { ok: false, error: "Video duration must be between 4 and 15 seconds." };
+  const creditsPerSecond = configuration.creditsPerSecond[resolution];
+  if (!creditsPerSecond) return { ok: false, error: `${model} does not support ${resolution} in the verified launch configuration.` };
+  const credits = creditsPerSecond * duration;
+  return { ok: true, credits, breakdown: [{ model, resolution, duration, credits_per_second: creditsPerSecond, credits }] };
+};
+
+const enforceLiveSpendLimits = async (env, userId, estimatedCredits) => {
+  const dayStart = Math.floor(now() / 86400) * 86400;
+  const globalLimit = positiveIntegerEnv(env.LIVE_DAILY_CREDIT_LIMIT, 2000);
+  const userLimit = positiveIntegerEnv(env.LIVE_USER_DAILY_CREDIT_LIMIT, 400);
+  const [globalUsage, userUsage] = await env.DB.batch([
+    env.DB.prepare("SELECT COALESCE(SUM(estimated_credits),0) AS value FROM shazan_jobs_v1 WHERE provider_key='fal' AND created_at>=? AND status NOT IN ('failed','cancelled')").bind(dayStart),
+    env.DB.prepare("SELECT COALESCE(SUM(estimated_credits),0) AS value FROM shazan_jobs_v1 WHERE provider_key='fal' AND user_id=? AND created_at>=? AND status NOT IN ('failed','cancelled')").bind(userId, dayStart),
+  ]);
+  const globalSpent = Number(globalUsage?.results?.[0]?.value || 0);
+  const userSpent = Number(userUsage?.results?.[0]?.value || 0);
+  if (globalSpent + estimatedCredits > globalLimit) return { ok: false, status: 503, error: "Daily live-generation budget reached. Please try again tomorrow." };
+  if (userSpent + estimatedCredits > userLimit) return { ok: false, status: 429, error: "Your daily live-generation limit has been reached." };
+  return { ok: true };
+};
 
 const envBoolean = (value) => {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : value;
@@ -379,8 +417,8 @@ const getActor = async (request, env, ctx, requireRole) => {
   const timestamp = now();
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,CASE WHEN ?='admin' THEN 'admin' ELSE 'user' END,?,?)").bind(userId, session.row.role, timestamp, timestamp),
-    env.DB.prepare("INSERT OR IGNORE INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,500,0,0,?)").bind(userId, timestamp),
-    env.DB.prepare("INSERT OR IGNORE INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at) VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account demo credits',?)").bind(id(), userId, userId, timestamp),
+    env.DB.prepare("INSERT OR IGNORE INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,400,0,0,?)").bind(userId, timestamp),
+    env.DB.prepare("INSERT OR IGNORE INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at) VALUES(?,?,'signup:'||?,'grant',400,0,0,'New account welcome credits',?)").bind(id(), userId, userId, timestamp),
   ]);
   const profile = await env.DB.prepare(`SELECT p.role,w.available,w.reserved,w.spent,u.email,u.display_name,u.status
     FROM shazan_user_profiles_v1 p JOIN shazan_credit_wallets_v1 w ON w.user_id=p.user_id
@@ -441,11 +479,11 @@ const quickCreationWorkflow = ({ mode, model, prompt, aspectRatio, resolution, d
         resolution,
         duration,
         reference_asset_ids: referenceAssets.map((asset) => asset.id).join(","),
-        demo: true,
+        live: true,
       },
     },
-    { id: "output", type: "result_preview", position: { x: 690, y: 160 }, data: { label: "Demo Output" } },
-    { id: "export", type: "download_export", position: { x: 970, y: 160 }, data: { format: "json", demo: true } },
+    { id: "output", type: "result_preview", position: { x: 690, y: 160 }, data: { label: "Live Output" } },
+    { id: "export", type: "download_export", position: { x: 970, y: 160 }, data: { format: "media", live: true } },
   );
   edges.push(
     { id: "prompt-to-generator", source: "prompt", target: generatorId, kind: "text" },
@@ -769,8 +807,13 @@ const createQuickCreation = async (request, env, ctx, actor) => {
   const aspectRatio = clean(body.value.aspect_ratio, 20) || "16:9";
   const resolution = clean(body.value.resolution, 20) || "720p";
   const duration = Math.min(180, Math.max(1, Math.trunc(Number(body.value.duration) || 5)));
-  if (!["image", "video", "music", "voice", "avatar"].includes(mode)) return apiError(ctx, 400, "Invalid creation mode");
+  if (!["image", "video"].includes(mode)) return apiError(ctx, 400, "Mode not live yet", "Verified launch currently supports image and video generation.");
   if (!model || prompt.length < 2) return apiError(ctx, 400, "Model and prompt required");
+  if (!await featureEnabled(env, "ENABLE_FAL")) return apiError(ctx, 503, "Live generation disabled", "Set ENABLE_FAL=true only after FAL_KEY and spend limits are configured.");
+  if (typeof env.FAL_KEY !== "string" || !env.FAL_KEY.trim()) return apiError(ctx, 503, "FAL_KEY is not configured");
+
+  const account = await env.DB.prepare("SELECT email_verified FROM shazan_auth_users_v2 WHERE id=? LIMIT 1").bind(actor.id).first();
+  if (Number(account?.email_verified) !== 1) return apiError(ctx, 403, "Email verification required", "Real generation use karne se pehle email verify karein.");
 
   const idempotencyKey = clean(request.headers.get("Idempotency-Key") || body.value.idempotency_key, 120);
   if (!/^[a-zA-Z0-9_.:-]{12,120}$/.test(idempotencyKey)) return apiError(ctx, 400, "Idempotency-Key header required");
@@ -779,6 +822,13 @@ const createQuickCreation = async (request, env, ctx, actor) => {
     const existingProject = await ownedProject(env.DB, duplicate.project_id, actor.id);
     return ctx.json({ job: jobView(duplicate), project: existingProject ? publicProject(existingProject) : null, duplicate: true });
   }
+
+  const estimate = estimateLiveCreationCredits({ mode, model, resolution, duration });
+  if (!estimate.ok) return apiError(ctx, 400, "Unsupported live configuration", estimate.error);
+  const retryAfter = await generationRateLimit(request, env, actor.id, 2, 60);
+  if (retryAfter) return ctx.json({ error: "Generation rate limit exceeded", message: "Ek minute mein maximum 2 real generations start kar sakte hain." }, 429, { "Retry-After": String(retryAfter) });
+  const spendLimit = await enforceLiveSpendLimits(env, actor.id, estimate.credits);
+  if (!spendLimit.ok) return apiError(ctx, spendLimit.status, "Live generation limit reached", spendLimit.error);
 
   const requestedIds = Array.isArray(body.value.reference_asset_ids)
     ? [...new Set(body.value.reference_asset_ids.map((value) => clean(value, 80)).filter(Boolean))].slice(0, 15)
@@ -798,23 +848,55 @@ const createQuickCreation = async (request, env, ctx, actor) => {
   const workflowHash = await sha256(canonical);
   const projectId = id();
   const versionId = id();
+  const jobId = id();
   const timestamp = now();
   const title = `${mode[0].toUpperCase()}${mode.slice(1)} · ${prompt}`.slice(0, 80);
-  const statements = [
-    env.DB.prepare(`INSERT INTO shazan_projects_v1(id,owner_id,name,description,workflow_json,workflow_hash,current_version,created_at,updated_at)
-      VALUES(?,?,?,?,?,?,1,?,?)`).bind(projectId, actor.id, title, "Created in SHAZAN AI Studio", canonical, workflowHash, timestamp, timestamp),
-    env.DB.prepare(`INSERT INTO shazan_project_versions_v1(id,project_id,version_number,workflow_json,workflow_hash,reason,created_by,created_at)
-      VALUES(?,?,1,?,?,?,?,?)`).bind(versionId, projectId, canonical, workflowHash, "Created by simple Studio", actor.id, timestamp),
-    ...requestedIds.map((assetId) => env.DB.prepare("UPDATE shazan_assets_v1 SET project_id=? WHERE id=? AND owner_id=? AND deleted_at IS NULL").bind(projectId, assetId, actor.id)),
-  ];
-  await env.DB.batch(statements);
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO shazan_projects_v1(id,owner_id,name,description,workflow_json,workflow_hash,current_version,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,1,?,?)`).bind(projectId, actor.id, title, "Created in SHAZAN AI Studio", canonical, workflowHash, timestamp, timestamp),
+      env.DB.prepare(`INSERT INTO shazan_project_versions_v1(id,project_id,version_number,workflow_json,workflow_hash,reason,created_by,created_at)
+        VALUES(?,?,1,?,?,?,?,?)`).bind(versionId, projectId, canonical, workflowHash, "Created by simple Studio", actor.id, timestamp),
+      ...requestedIds.map((assetId) => env.DB.prepare("UPDATE shazan_assets_v1 SET project_id=? WHERE id=? AND owner_id=? AND deleted_at IS NULL").bind(projectId, assetId, actor.id)),
+      env.DB.prepare(`INSERT INTO shazan_jobs_v1(id,user_id,project_id,provider_key,provider_request_id,idempotency_key,workflow_json,workflow_hash,status,progress,estimated_credits,attempt,max_attempts,next_attempt_at,created_at,updated_at)
+        VALUES(?,?,?,'fal',NULL,?,?,?,'queued',0,?,1,1,?,?,?)`).bind(jobId, actor.id, projectId, idempotencyKey, canonical, workflowHash, estimate.credits, timestamp, timestamp, timestamp),
+      createJobEvent(env.DB, jobId, "queued", 0, "Credits reserved; submitting to verified fal.ai queue", timestamp),
+    ]);
+  } catch (error) {
+    if (/INSUFFICIENT_CREDITS/i.test(String(error?.message || error))) return apiError(ctx, 402, "Insufficient credits", "Is generation ke liye enough credits nahi hain.", { required: estimate.credits, available: actor.wallet.available });
+    throw error;
+  }
 
-  const runHeaders = new Headers({ "Content-Type": "application/json", "Idempotency-Key": idempotencyKey });
-  const runRequest = new Request(request.url, { method: "POST", headers: runHeaders, body: JSON.stringify({ provider: "mock", idempotency_key: idempotencyKey }) });
-  const runResponse = await createWorkflowRun(runRequest, env, ctx, actor, projectId);
-  const runPayload = await runResponse.json().catch(() => ({}));
+  const submission = await ctx.liveGeneration?.submit?.({
+    userId: actor.id,
+    mode,
+    model,
+    prompt,
+    aspectRatio,
+    resolution,
+    duration,
+    referenceAssetIds: requestedIds,
+  });
+  if (!submission?.ok || !submission.requestId) {
+    const message = clean(submission?.error, 500) || "Live provider submission failed.";
+    const failedAt = now();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE shazan_jobs_v1 SET status='failed',progress=100,last_error=?,completed_at=?,updated_at=? WHERE id=? AND status='queued'").bind(message, failedAt, failedAt, jobId),
+      createJobEvent(env.DB, jobId, "failed", 100, `Provider rejected submission: ${message}`, failedAt),
+    ]);
+    const failed = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? LIMIT 1").bind(jobId).first();
+    const project = { id: projectId, name: title, description: "Created in SHAZAN AI Studio", workflow: validation.workflow, version: 1, created_at: timestamp, updated_at: timestamp };
+    return ctx.json({ job: jobView(failed), project, cost: estimate }, submission?.status >= 400 && submission.status < 500 ? submission.status : 502);
+  }
+
+  const startedAt = now();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE shazan_jobs_v1 SET provider_request_id=?,status='processing',progress=5,started_at=?,updated_at=? WHERE id=? AND status='queued'").bind(submission.requestId, startedAt, startedAt, jobId),
+    createJobEvent(env.DB, jobId, "processing", 5, "Verified fal.ai generation started", startedAt),
+  ]);
+  const row = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? LIMIT 1").bind(jobId).first();
   const project = { id: projectId, name: title, description: "Created in SHAZAN AI Studio", workflow: validation.workflow, version: 1, created_at: timestamp, updated_at: timestamp };
-  return ctx.json({ ...runPayload, project }, runResponse.status);
+  return ctx.json({ job: jobView(row), project, cost: estimate }, 202);
 };
 
 const mockShouldFail = (job) => /\[fail\]/i.test(job.workflow_json);
@@ -903,7 +985,94 @@ const finalizeMockJob = async (env, job) => {
   ]);
 };
 
-export const processPersistentJob = async (env, jobId, userId) => {
+const trustedLiveResultUrl = (raw) => {
+  try {
+    const url = new URL(String(raw || ""));
+    const host = url.hostname.toLowerCase();
+    const trusted = host === "storage.googleapis.com" || host.endsWith(".fal.media") || host.endsWith(".fal.ai");
+    return url.protocol === "https:" && trusted ? url.toString() : "";
+  } catch { return ""; }
+};
+
+const persistLiveResult = async (env, job, output) => {
+  if (!env.MEDIA?.put) throw new Error("R2 MEDIA binding missing");
+  const sourceUrl = trustedLiveResultUrl(output?.url);
+  if (!sourceUrl || !["image", "video"].includes(output?.type)) throw new Error("Provider returned an untrusted or unsupported result.");
+  const response = await fetch(sourceUrl, { redirect: "error" });
+  if (!response.ok || !response.body) throw new Error(`Provider result download failed (${response.status}).`);
+  const declaredSize = Number(response.headers.get("Content-Length") || 0);
+  if (declaredSize > 200 * 1024 * 1024) throw new Error("Provider result exceeds the 200 MB storage limit.");
+  const contentType = output.type === "video"
+    ? (response.headers.get("Content-Type")?.startsWith("video/") ? response.headers.get("Content-Type") : "video/mp4")
+    : (response.headers.get("Content-Type")?.startsWith("image/") ? response.headers.get("Content-Type") : "image/jpeg");
+  const extension = output.type === "video" ? "mp4" : contentType === "image/png" ? "png" : "jpg";
+  const assetId = id();
+  const filename = `shazan-${job.id}.${extension}`;
+  const key = `users/${job.user_id}/generated/${job.id}/${filename}`;
+  await env.MEDIA.put(key, response.body, {
+    httpMetadata: { contentType, contentDisposition: `inline; filename="${filename}"` },
+    customMetadata: { ownerId: job.user_id, jobId: job.id, assetId, provider: "fal" },
+  });
+  const timestamp = now();
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO shazan_assets_v1(id,owner_id,project_id,job_id,kind,source,filename,content_type,size_bytes,r2_key,metadata_json,created_at)
+      VALUES(?,?,?,?,?,'generated',?,?,?,?,?,?)`).bind(assetId, job.user_id, job.project_id, job.id, output.type, filename, contentType, Math.max(0, declaredSize), key, JSON.stringify({ provider: "fal", provider_request_id: job.provider_request_id, workflow_hash: job.workflow_hash }), timestamp),
+    env.DB.prepare("UPDATE shazan_jobs_v1 SET status='completed',progress=100,result_asset_id=?,completed_at=?,updated_at=?,last_error=NULL WHERE id=? AND status='processing'").bind(assetId, timestamp, timestamp, job.id),
+    createJobEvent(env.DB, job.id, "completed", 100, "Live media stored securely; reserved credits charged once", timestamp),
+  ]);
+};
+
+const processLiveJob = async (env, job, ctx) => {
+  const timestamp = now();
+  const age = timestamp - Number(job.created_at || timestamp);
+  if (!job.provider_request_id || !ctx?.liveGeneration?.poll) {
+    if (age > 3600) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE shazan_jobs_v1 SET status='failed',progress=100,last_error='Live generation timed out',completed_at=?,updated_at=? WHERE id=? AND status IN ('queued','processing')").bind(timestamp, timestamp, job.id),
+        createJobEvent(env.DB, job.id, "failed", 100, "Live generation timed out; reserved credits refunded", timestamp),
+      ]);
+    }
+    return env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? LIMIT 1").bind(job.id).first();
+  }
+  const polled = await ctx.liveGeneration.poll(job.provider_request_id);
+  if (!polled?.ok) {
+    if (age > 3600) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE shazan_jobs_v1 SET status='failed',progress=100,last_error=?,completed_at=?,updated_at=? WHERE id=? AND status IN ('queued','processing')").bind(clean(polled?.error, 500) || "Provider status timed out", timestamp, timestamp, job.id),
+        createJobEvent(env.DB, job.id, "failed", 100, "Provider status timed out; reserved credits refunded", timestamp),
+      ]);
+    } else {
+      await env.DB.prepare("UPDATE shazan_jobs_v1 SET last_error=?,updated_at=? WHERE id=? AND status IN ('queued','processing')").bind(clean(polled?.error, 500) || "Provider status temporarily unavailable", timestamp, job.id).run();
+    }
+    return env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? LIMIT 1").bind(job.id).first();
+  }
+  if (polled.status === "failed") {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE shazan_jobs_v1 SET status='failed',progress=100,last_error=?,completed_at=?,updated_at=? WHERE id=? AND status IN ('queued','processing')").bind(clean(polled.error, 500) || "Provider generation failed", timestamp, timestamp, job.id),
+      createJobEvent(env.DB, job.id, "failed", 100, "Provider generation failed; reserved credits refunded", timestamp),
+    ]);
+  } else if (polled.status === "completed" && polled.output) {
+    try {
+      await persistLiveResult(env, job, polled.output);
+    } catch (error) {
+      const message = clean(error?.message, 500) || "Generated media storage failed";
+      if (age > 3600) {
+        await env.DB.batch([
+          env.DB.prepare("UPDATE shazan_jobs_v1 SET status='failed',progress=100,last_error=?,completed_at=?,updated_at=? WHERE id=? AND status='processing'").bind(message, timestamp, timestamp, job.id),
+          createJobEvent(env.DB, job.id, "failed", 100, "Result storage failed; reserved credits refunded", timestamp),
+        ]);
+      } else {
+        await env.DB.prepare("UPDATE shazan_jobs_v1 SET progress=99,last_error=?,updated_at=? WHERE id=? AND status='processing'").bind(message, timestamp, job.id).run();
+      }
+    }
+  } else {
+    const progress = Math.max(Number(job.progress) || 5, Math.min(95, Number(polled.progress) || (polled.status === "processing" ? 35 : 10)));
+    await env.DB.prepare("UPDATE shazan_jobs_v1 SET status='processing',progress=?,last_error=NULL,updated_at=? WHERE id=? AND status IN ('queued','processing')").bind(progress, timestamp, job.id).run();
+  }
+  return env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? LIMIT 1").bind(job.id).first();
+};
+
+export const processPersistentJob = async (env, jobId, userId, ctx = {}) => {
   let job = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
   if (!job || ["completed","failed","cancelled"].includes(job.status)) return job;
   const timestamp = now();
@@ -919,6 +1088,7 @@ export const processPersistentJob = async (env, jobId, userId) => {
   if (Number(lease?.meta?.changes || 0) === 0) return job;
 
   try {
+    if (job.provider_key === "fal") return processLiveJob(env, job, ctx);
     if (job.status === "queued") {
       const age = timestamp - Number(job.updated_at);
       const progress = mockProgressForAge(age);
@@ -972,7 +1142,7 @@ const listJobs = async (request, env, ctx, actor) => {
 };
 
 const getJob = async (env, ctx, actor, jobId) => {
-  const row = await processPersistentJob(env, jobId, actor.id);
+  const row = await processPersistentJob(env, jobId, actor.id, ctx);
   if (!row) return apiError(ctx, 404, "Job not found");
   const events = await env.DB.prepare("SELECT status,progress,message,created_at FROM shazan_job_events_v1 WHERE job_id=? ORDER BY created_at ASC LIMIT 100").bind(jobId).all();
   return ctx.json({ job: jobView(row), events: events.results || [] });
@@ -981,6 +1151,7 @@ const getJob = async (env, ctx, actor, jobId) => {
 const cancelJob = async (env, ctx, actor, jobId) => {
   const row = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, actor.id).first();
   if (!row) return apiError(ctx, 404, "Job not found");
+  if (row.provider_key === "fal") return apiError(ctx, 409, "Live cancellation unavailable", "Provider cancellation is not enabled until its exact endpoint and billing behavior pass staging verification.");
   if (!["queued","processing"].includes(row.status)) return apiError(ctx, 409, "Job cannot be cancelled", `Current status: ${row.status}`);
   const timestamp = now();
   await env.DB.batch([
@@ -993,6 +1164,7 @@ const cancelJob = async (env, ctx, actor, jobId) => {
 const retryJob = async (request, env, ctx, actor, jobId) => {
   const previous = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, actor.id).first();
   if (!previous) return apiError(ctx, 404, "Job not found");
+  if (previous.provider_key === "fal") return apiError(ctx, 409, "Create a new live generation", "Live retries require a new idempotency key and a fresh cost estimate.");
   if (!["failed","cancelled"].includes(previous.status)) return apiError(ctx, 409, "Only failed or cancelled jobs can be retried");
   const headerKey = clean(request.headers.get("Idempotency-Key"), 120);
   const idempotencyKey = headerKey || `retry:${jobId}:${id()}`;
@@ -1026,7 +1198,7 @@ const jobEventStream = async (request, env, ctx, actor, jobId) => {
       request.signal.addEventListener("abort", close, { once: true });
       try {
         for (let index = 0; index < 20 && !closed; index += 1) {
-          const row = await processPersistentJob(env, jobId, actor.id);
+          const row = await processPersistentJob(env, jobId, actor.id, ctx);
           if (!row) break;
           controller.enqueue(encoder.encode(`event: progress\ndata: ${JSON.stringify(jobView(row))}\n\n`));
           if (["completed","failed","cancelled"].includes(row.status)) break;
