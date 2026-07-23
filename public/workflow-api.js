@@ -1088,7 +1088,7 @@ export const processPersistentJob = async (env, jobId, userId, ctx = {}) => {
   if (Number(lease?.meta?.changes || 0) === 0) return job;
 
   try {
-    if (job.provider_key === "fal") return processLiveJob(env, job, ctx);
+    if (job.provider_key === "fal") return await processLiveJob(env, job, ctx);
     if (job.status === "queued") {
       const age = timestamp - Number(job.updated_at);
       const progress = mockProgressForAge(age);
