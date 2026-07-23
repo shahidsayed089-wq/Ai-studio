@@ -7,7 +7,7 @@ const frozenUi = Object.freeze({
   "app/admin/pagination.css": "0faf70634140d468f51c0d72d5b9ac884d3aed4e",
   "app/globals.css": "e3454dde313ae035eb4307901f88d27b0c0b4261",
   "app/layout.tsx": "807697a6a9b80fc05dbff00efaf280a3209d89e6",
-  "app/page.tsx": "1fefb0002196f5fb45a603f7dda777f40220769f",
+  "app/page.tsx": "f1a5fd9edcb0b91d224b5f985dfa0c9bf42d2520",
   "app/reset/page.tsx": "f123791a3f261b11673f784384e3ce870c1da09f",
   "app/share/page.tsx": "f6cacc71d9786c64992ae00643a68b50585f0d89",
   "app/share/share.css": "35836dfa70306e122ad5c0d321752ff03f8ababc",
