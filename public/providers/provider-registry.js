@@ -1,4 +1,5 @@
 import { mockProvider } from "./mock-provider.js";
+import { falProvider } from "./fal-provider.js";
 
 const LIVE_PROVIDER_TOOLS = Object.freeze({
   fal: ["FLUX 2 Pro", "Kling 3", "Veo", "image/video utilities"],
@@ -29,8 +30,10 @@ class DisabledLiveProviderAdapter {
   calculateCost() { return this.unavailable(); }
 }
 
-const adapters = new Map([["mock", mockProvider]]);
-for (const key of Object.keys(LIVE_PROVIDER_TOOLS)) adapters.set(key, new DisabledLiveProviderAdapter(key));
+const adapters = new Map([["mock", mockProvider], ["fal", falProvider]]);
+for (const key of Object.keys(LIVE_PROVIDER_TOOLS)) {
+  if (!adapters.has(key)) adapters.set(key, new DisabledLiveProviderAdapter(key));
+}
 
 export const getProviderAdapter = (key) => adapters.get(String(key || "").toLowerCase()) || null;
 export const listProviderAdapters = () => [...adapters.keys()].map((key) => ({ key, tools: LIVE_PROVIDER_TOOLS[key] || ["Deterministic full workflow"] }));

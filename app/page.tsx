@@ -790,24 +790,31 @@ export default function Home() {
           reference_asset_ids: referenceAssetIds,
         }),
       });
-      let payload = await response.json().catch(() => ({})) as { job?: { id?: string; status?: string; progress?: number; result_url?: string; error?: string }; message?: string; error?: string };
+      let payload = await response.json().catch(() => ({})) as { job?: { id?: string; provider?: string; status?: string; progress?: number; result_url?: string; error?: string }; cost?: { credits?: number }; message?: string; error?: string };
       if (!response.ok || !payload.job?.id) throw new Error(payload.message || payload.error || `Generation failed (${response.status})`);
+      const reservedCredits = Math.max(0, Number(payload.cost?.credits) || 0);
       setGeneratorStatus("queued");
-      setGeneratorMessage("Demo creation queue mein hai…");
+      setGeneratorMessage(payload.job.provider === "mock"
+        ? "Demo creation queue mein hai…"
+        : `Live creation queue mein hai… ${reservedCredits} credits reserved.`);
 
       for (let attempt = 0; attempt < 90; attempt += 1) {
         if (generatorRunRef.current !== quickRunId) return;
         const job = payload.job;
         if (job?.status === "completed" && job.result_url) {
           setGeneratorVideoUrl(job.result_url);
-          setGeneratorOutputType("file");
+          setGeneratorOutputType(job.provider === "mock" ? "file" : activeMode === "image" ? "image" : activeMode === "music" || activeMode === "voice" ? "audio" : "video");
           setGeneratorStatus("completed");
-          setGeneratorMessage("Demo creation ready hai — preview proof aur download available hai.");
+          setGeneratorMessage(job.provider === "mock"
+            ? "Demo creation ready hai — preview proof aur download available hai."
+            : `Creation ready hai — ${reservedCredits} credits charged once; private preview aur download available hai.`);
           return;
         }
         if (job?.status === "failed" || job?.status === "cancelled") throw new Error(job.error || (job.status === "failed" ? "Creation permanently failed; reserved credits refunded." : "Creation cancelled; reserved credits refunded."));
         setGeneratorStatus(job?.status === "processing" ? "processing" : "queued");
-        setGeneratorMessage(job?.status === "processing" ? `SHAZAN Demo create kar raha hai… ${Math.max(0, Math.min(99, Number(job.progress) || 0))}%` : "Demo creation queue mein hai…");
+        setGeneratorMessage(job?.status === "processing"
+          ? `SHAZAN ${job?.provider === "mock" ? "Demo" : "AI"} create kar raha hai… ${Math.max(0, Math.min(99, Number(job?.progress) || 0))}%`
+          : job?.provider === "mock" ? "Demo creation queue mein hai…" : "Live creation queue mein hai…");
         await new Promise((resolve) => window.setTimeout(resolve, 1000));
         const statusResponse = await fetch(`/api/v1/jobs/${encodeURIComponent(job!.id!)}`, { cache: "no-store", credentials: "same-origin" });
         payload = await statusResponse.json().catch(() => ({}));

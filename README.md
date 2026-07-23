@@ -1,8 +1,8 @@
 # SHAZAN AI Workflow Studio
 
-Production-oriented visual AI workflow application built on Next.js static export, Cloudflare Pages Advanced Mode, D1, R2 and an optional Cloudflare Queue consumer.
+Production-oriented visual AI workflow application built on Next.js static export, Cloudflare Pages Advanced Mode, D1, R2 and a Cloudflare Queue consumer.
 
-The launch-safe provider is **SHAZAN Mock Provider**: it executes the complete persistent workflow, SSE progress, R2 export and atomic credit lifecycle without spending paid API balance. Live fal/Kie/OpenAI/Google/xAI/HeyGen adapters remain server-side and must be enabled only after their queue consumer and pricing have passed staging.
+The public Studio uses a server-only **fal.ai live adapter**. The adapter submits approved model IDs through fal's persistent queue, stores completed media privately in SHAZAN R2 and captures reserved credits exactly once. **SHAZAN Mock Provider** remains available only for local/automated testing and explicitly selected Pro Canvas demo runs; it is never a production Studio fallback.
 
 ## What works
 
@@ -19,7 +19,8 @@ The launch-safe provider is **SHAZAN Mock Provider**: it executes the complete p
 - D1 job lease locking, heartbeats, expired-lease recovery and durable attempt records.
 - Global CSP/HSTS/security headers, request IDs and redacted structured error/slow-request logs.
 - Current-device and all-device logout; verified `ADMIN_EMAIL` bootstrap without a hardcoded password.
-- Explicit Demo metadata: `Demo Output — no paid AI model was called.`
+- Live fal.ai generation for verified users, with conservative preflight credit estimates.
+- Explicit Demo metadata whenever Mock is deliberately used: `Demo Output — no paid AI model was called.`
 
 ## Architecture
 
@@ -29,13 +30,13 @@ Browser
   └─ /api/* ─ Pages Advanced Mode Worker
                 ├─ D1: users, sessions, projects, jobs, credits, audit
                 ├─ R2: uploads and generated exports
-                ├─ Queue producer (optional)
+                ├─ Queue producer
                 └─ Provider adapter registry (secrets remain server-side)
                          │
                          └─ Cloudflare Queue consumer + cron fallback
 ```
 
-`public/_worker.js` is copied to `out/_worker.js`. `public/workflow-api.js` contains the ownership-enforced API and D1 job state machine. `worker/queue-consumer.js` is the optional independent Queue consumer. Without the Queue binding, Mock jobs still persist in D1 and advance safely through status/SSE requests.
+`public/_worker.js` is copied to `out/_worker.js`. `public/workflow-api.js` contains the ownership-enforced API and D1 job state machine. `worker/queue-consumer.js` is the independent Queue consumer and cron recovery worker. Both the Pages Worker and Queue consumer require the same encrypted `FAL_KEY`; the key is never returned to the browser or written to D1.
 
 ## Local development
 
@@ -64,6 +65,8 @@ npm run test:e2e
 - `migrations/0001_auth.sql` — auth users, sessions and rate limits.
 - `migrations/0002_workflow_studio.sql` — profiles, wallets, ledger, projects, versions, shares, assets, jobs, events, providers, webhooks, audits and atomic credit triggers.
 - `migrations/0003_production_hardening.sql` — feature flags, Runway/MuAPI registry records, durable leases and job-attempt history.
+- `migrations/0004_public_beta_release_lock.sql` — disables payments, community and unverified providers.
+- `migrations/0005_enable_fal_live_generation.sql` — enables only the reviewed fal.ai adapter; all other live providers remain disabled.
 
 Apply locally:
 
@@ -121,7 +124,12 @@ Live provider secrets (server only):
 
 - `FAL_KEY`, `KIE_API_KEY`, `OPENAI_API_KEY`.
 
-Public-beta paid capabilities are code-level release-locked off: payments, community, fal, Kie, OpenAI, Google AI, xAI, HeyGen, Runway and MuAPI cannot be enabled by a database/admin toggle. A future reviewed code release must remove that lock. `PUBLIC_BETA`, `ENABLE_DEMO_PROVIDER` and `ENABLE_GOOGLE_AUTH` remain configurable.
+For production live generation, set `FAL_KEY` in both places:
+
+1. Cloudflare Pages → `ai-studio` → Production secrets.
+2. Cloudflare Workers → `shazan-ai-queue-consumer` → Production secrets.
+
+Alternatively add the same value as the encrypted GitHub Actions secret `FAL_KEY`; the deployment workflow pipes it directly into Wrangler without printing it. Payments, community, Kie, direct OpenAI, Google AI, xAI, HeyGen, Runway and MuAPI remain code-level release-locked off. fal.ai is the only reviewed live generation route.
 
 The legacy landing generator remains owner-locked by `STUDIO_ACCESS_CODE`; public model cards transfer their prompt/model into the credit-protected Workflow Studio and do not call the legacy paid route.
 
@@ -139,12 +147,13 @@ npm run build && npm run scan:client-secrets
 
 `test:production-smoke` requires two dedicated accounts through `PRODUCTION_SMOKE_USER_EMAIL`, `PRODUCTION_SMOKE_USER_PASSWORD`, `PRODUCTION_SMOKE_SECOND_EMAIL` and `PRODUCTION_SMOKE_SECOND_PASSWORD` to prove private R2 and cross-user isolation without creating unmanaged production accounts. `test:load` uses the primary account and `LOAD_JOB_ID` for authenticated/SSE routes.
 
-## Optional Cloudflare Queue consumer
+## Cloudflare Queue consumer
 
 Create `shazan-workflow-jobs` and `shazan-workflow-jobs-dlq`, add a Pages producer binding named `WORKFLOW_QUEUE`, then deploy:
 
 ```bash
-npx wrangler deploy --config wrangler.queue.jsonc
+printf '%s' "$FAL_KEY" | npx wrangler secret put FAL_KEY --config wrangler.queue.jsonc
+npx wrangler deploy --config wrangler.queue.jsonc --keep-vars
 ```
 
 The consumer retries with delayed exponential backoff and a minute cron fallback. D1 is always the source of truth, so Queue delivery is at-least-once while charging remains exactly-once through unique ledger keys and database triggers.

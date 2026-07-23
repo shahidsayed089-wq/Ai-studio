@@ -38,7 +38,14 @@ const worker = {
       env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_jobs_v1 WHERE status IN ('queued','processing')"),
       env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_job_leases_v1 WHERE leased_until>?").bind(Math.floor(Date.now() / 1000)),
     ]);
-    return Response.json({ status: "ok", service: "SHAZAN queue consumer", pending: Number(pending?.results?.[0]?.value || 0), active_leases: Number(activeLeases?.results?.[0]?.value || 0) });
+    const falConfigured = typeof env.FAL_KEY === "string" && env.FAL_KEY.trim().length >= 16;
+    return Response.json({
+      status: falConfigured ? "ok" : "degraded",
+      service: "SHAZAN queue consumer",
+      pending: Number(pending?.results?.[0]?.value || 0),
+      active_leases: Number(activeLeases?.results?.[0]?.value || 0),
+      fal_configured: falConfigured,
+    }, { status: falConfigured ? 200 : 503 });
   },
 };
 
