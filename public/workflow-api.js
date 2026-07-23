@@ -998,13 +998,15 @@ const persistLiveResult = async (env, job, output) => {
   if (!env.MEDIA?.put) throw new Error("R2 MEDIA binding missing");
   const sourceUrl = trustedLiveResultUrl(output?.url);
   if (!sourceUrl || !["image", "video"].includes(output?.type)) throw new Error("Provider returned an untrusted or unsupported result.");
-  const response = await fetch(sourceUrl, { redirect: "error" });
+  const response = await fetch(sourceUrl, { redirect: "manual" });
+  if (response.status >= 300 && response.status < 400) throw new Error("Provider result redirect was rejected.");
   if (!response.ok || !response.body) throw new Error(`Provider result download failed (${response.status}).`);
   const declaredSize = Number(response.headers.get("Content-Length") || 0);
   if (declaredSize > 200 * 1024 * 1024) throw new Error("Provider result exceeds the 200 MB storage limit.");
+  const responseContentType = String(response.headers.get("Content-Type") || "").split(";")[0].toLowerCase();
   const contentType = output.type === "video"
-    ? (response.headers.get("Content-Type")?.startsWith("video/") ? response.headers.get("Content-Type") : "video/mp4")
-    : (response.headers.get("Content-Type")?.startsWith("image/") ? response.headers.get("Content-Type") : "image/jpeg");
+    ? (responseContentType.startsWith("video/") ? responseContentType : "video/mp4")
+    : (responseContentType.startsWith("image/") ? responseContentType : "image/jpeg");
   const extension = output.type === "video" ? "mp4" : contentType === "image/png" ? "png" : "jpg";
   const assetId = id();
   const filename = `shazan-${job.id}.${extension}`;
