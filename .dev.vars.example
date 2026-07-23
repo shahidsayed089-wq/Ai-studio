@@ -34,6 +34,9 @@ ALERT_WEBHOOK_URL=https://hooks.slack.com/services/replace/me
 
 # Live generation providers. Mock Provider requires none of these.
 FAL_KEY=replace-with-private-fal-key
+# Production: set ENABLE_FAL=true only after this secret and the limits below are configured.
+LIVE_DAILY_CREDIT_LIMIT=2000
+LIVE_USER_DAILY_CREDIT_LIMIT=400
 KIE_API_KEY=replace-with-private-kie-key
 OPENAI_API_KEY=replace-with-private-openai-key
 GOOGLE_AI_API_KEY=replace-with-private-google-ai-key
