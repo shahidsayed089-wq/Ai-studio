@@ -38,7 +38,7 @@ const worker = {
       env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_jobs_v1 WHERE status IN ('queued','processing')"),
       env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_job_leases_v1 WHERE leased_until>?").bind(Math.floor(Date.now() / 1000)),
     ]);
-    const falKey = env.FAL_KEY || env.FAL_AI_KEY || env["Fal ai"] || env["Fal AI"];
+    const falKey = env.FAL_KEY || env.FAL_AI_KEY || env.ENABLE_FAL || env["Fal ai"] || env["Fal AI"];
     const falConfigured = typeof falKey === "string" && falKey.trim().length >= 16;
     return Response.json({
       status: falConfigured ? "ok" : "degraded",
