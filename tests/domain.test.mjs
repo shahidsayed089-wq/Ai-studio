@@ -82,6 +82,7 @@ test("fal adapter maps approved models, prices conservatively and keeps request 
   assert.equal(getProviderAdapter("fal").calculateCost(liveImage).credits, 15);
   assert.equal((await getProviderAdapter("fal").checkAvailability({ FAL_KEY: "fal-key-for-server-only-tests" })).available, true);
   assert.equal((await getProviderAdapter("fal").checkAvailability({ "Fal ai": "legacy-cloudflare-fal-key" })).available, true);
+  assert.equal((await getProviderAdapter("fal").checkAvailability({ ENABLE_FAL: "legacy-enable-fal-api-key" })).available, true);
   const encoded = encodeFalRequestId(task.modelPath, "request_12345");
   assert.deepEqual(decodeFalRequestId(encoded), { modelPath: task.modelPath, requestId: "request_12345" });
 });
