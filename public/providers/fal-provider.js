@@ -309,6 +309,7 @@ const outputType = (url, result) => {
 export const falKeyFromEnv = (env = {}) => clean(
   env?.FAL_KEY
     || env?.FAL_AI_KEY
+    || env?.ENABLE_FAL
     || env?.["Fal ai"]
     || env?.["Fal AI"],
   1000,
