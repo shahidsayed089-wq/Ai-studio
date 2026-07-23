@@ -66,7 +66,10 @@ jobs:
           npx wrangler d1 execute ai-studio-wallet --remote --command "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('shazan_feature_flags_v1','shazan_job_leases_v1','shazan_job_attempts_v1') ORDER BY name; SELECT provider_key,enabled FROM shazan_providers_v1 ORDER BY provider_key; SELECT flag_key,enabled FROM shazan_feature_flags_v1 WHERE flag_key IN ('ENABLE_FAL','ENABLE_LIVE_PAYMENTS','ENABLE_COMMUNITY') ORDER BY flag_key;"
 
       - name: Deploy persistent Queue consumer
-        run: npx wrangler deploy --config wrangler.queue.jsonc --keep-vars --strict
+        # Dashboard-managed secrets are intentionally preserved. `--strict`
+        # aborts whenever a one-time secret update changes the remote config,
+        # even when the checked-in queue/D1/R2 bindings are still authoritative.
+        run: npx wrangler deploy --config wrangler.queue.jsonc --keep-vars
 
       - name: Configure and verify Queue consumer fal.ai secret
         shell: bash
