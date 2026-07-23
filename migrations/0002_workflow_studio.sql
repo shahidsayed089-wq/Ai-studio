@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS shazan_auth_tokens_v1 (
 
 CREATE TABLE IF NOT EXISTS shazan_credit_wallets_v1 (
   user_id TEXT PRIMARY KEY,
-  available INTEGER NOT NULL DEFAULT 500 CHECK(available >= 0),
+  available INTEGER NOT NULL DEFAULT 400 CHECK(available >= 0),
   reserved INTEGER NOT NULL DEFAULT 0 CHECK(reserved >= 0),
   spent INTEGER NOT NULL DEFAULT 0 CHECK(spent >= 0),
   updated_at INTEGER NOT NULL,
@@ -228,7 +228,7 @@ CREATE TRIGGER IF NOT EXISTS shazan_admin_credit_apply_v1 AFTER INSERT ON shazan
 END;
 
 INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('mock','SHAZAN Mock Provider',1,'mock',unixepoch());
-INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('fal','fal.ai',0,'live',unixepoch());
+INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('fal','fal.ai',1,'live',unixepoch());
 INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('kie','Kie.ai',0,'live',unixepoch());
 INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('openai','OpenAI',0,'live',unixepoch());
 INSERT OR IGNORE INTO shazan_providers_v1(provider_key,display_name,enabled,mode,updated_at) VALUES('google','Google AI',0,'live',unixepoch());
