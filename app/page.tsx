@@ -61,12 +61,19 @@ const modes: { id: Mode; label: string; placeholder: string }[] = [
 ];
 
 const modelMap: Record<Mode, string[]> = {
-  image: ["GPT Image 2", "Nano Banana 2", "Nano Banana Pro", "Grok Imagine Image", "FLUX 2 Pro"],
+  image: ["Nano Banana 2", "FLUX 2 Pro", "GPT Image 2", "Nano Banana Pro", "Grok Imagine Image"],
   video: ["Seedance 2.0 Standard", "Seedance 2.0 Fast", "Seedance 2.0 Mini", "Gemini Omni Flash", "Grok Imagine Video 1.5", "Kling 3.0 Pro", "Kling 3.0 Omni 4K", "Kling 3.0 Elements", "Veo 3.1", "Happy Horse 1.1"],
   music: ["Lyria 3", "AudioFlow", "Suno", "Score Composer · CassetteAI"],
   voice: ["GPT Voice", "ElevenLabs", "Voice Forge", "Multilingual Pro"],
   avatar: ["HeyGen Avatar IV", "Avatar One", "Digital Twin", "Performance Capture"],
 };
+
+const VERIFIED_LIVE_MODEL_KEYS = new Set([
+  "nano_banana_2",
+  "flux_2_pro",
+  "seedance_2_0_standard",
+  "seedance_2_0_fast",
+]);
 
 const emptyReferences = (): ReferenceFiles => ({ images: [], videos: [], audio: [] });
 
@@ -349,7 +356,7 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
     { name: "FLUX 2 Pro", maker: "BLACK FOREST", tag: "Photo", art: "world", features: ["Photoreal", "Typography"] },
   ],
   video: [
-    { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "base API rate · from $0.057/sec" },
+    { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "verified fal.ai rate · $0.3034/sec at 720p" },
     { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["Unified multimodal inputs", "480p / 720p high volume"], credits: "live rate checked before launch" },
     { name: "Seedance 2.0 Mini", maker: "BYTEDANCE · KIE", tag: "Fallback", art: "ice", features: ["Kie API route", "Fast drafts + iteration"], credits: "live rate checked before launch" },
     { name: "Gemini Omni Flash", maker: "GOOGLE", tag: "New", art: "world", features: ["Text or image references", "Synchronized audio · 3–10s"] },
@@ -591,7 +598,7 @@ export default function Home() {
         : activeMode === "avatar"
           ? getAvatarInputProfile(model)
           : getVideoInputProfile(model);
-  const baseApiRate = creditModel === "kling" ? 0.07 : 0.057;
+  const baseApiRate = creditModel === "kling" ? 0.07 : creditResolution === "1080p" ? 0.682 : 0.3034;
   const creditTotal = `$${(baseApiRate * creditDuration).toFixed(2)}+`;
   const creditMath = `$${baseApiRate.toFixed(3)}/sec base rate × ${creditDuration} sec`;
   const generatorBusy = generatorStatus === "uploading" || generatorStatus === "queued" || generatorStatus === "processing";
@@ -747,6 +754,13 @@ export default function Home() {
       return;
     }
 
+    const apiModelKey = getApiModelKey(model);
+    if (!VERIFIED_LIVE_MODEL_KEYS.has(apiModelKey)) {
+      setGeneratorStatus("failed");
+      setGeneratorMessage(`${model} abhi preview library mein hai. Real launch ke liye Nano Banana 2, FLUX 2 Pro, Seedance 2.0 Standard ya Seedance 2.0 Fast choose karein.`);
+      return;
+    }
+
     const quickRunId = generatorRunRef.current + 1;
     generatorRunRef.current = quickRunId;
     setGeneratorVideoUrl("");
@@ -782,7 +796,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
         body: JSON.stringify({
           mode: activeMode,
-          model: getApiModelKey(model),
+          model: apiModelKey,
           prompt: cleanPrompt,
           aspect_ratio: activeMode === "avatar" ? "source" : videoAspectRatio,
           resolution: videoResolution,
@@ -793,7 +807,7 @@ export default function Home() {
       let payload = await response.json().catch(() => ({})) as { job?: { id?: string; status?: string; progress?: number; result_url?: string; error?: string }; message?: string; error?: string };
       if (!response.ok || !payload.job?.id) throw new Error(payload.message || payload.error || `Generation failed (${response.status})`);
       setGeneratorStatus("queued");
-      setGeneratorMessage("Demo creation queue mein hai…");
+      setGeneratorMessage("Real creation fal.ai queue mein hai…");
 
       for (let attempt = 0; attempt < 90; attempt += 1) {
         if (generatorRunRef.current !== quickRunId) return;
@@ -802,12 +816,12 @@ export default function Home() {
           setGeneratorVideoUrl(job.result_url);
           setGeneratorOutputType("file");
           setGeneratorStatus("completed");
-          setGeneratorMessage("Demo creation ready hai — preview proof aur download available hai.");
+          setGeneratorMessage("Real creation ready hai — private preview aur download available hai.");
           return;
         }
         if (job?.status === "failed" || job?.status === "cancelled") throw new Error(job.error || (job.status === "failed" ? "Creation permanently failed; reserved credits refunded." : "Creation cancelled; reserved credits refunded."));
         setGeneratorStatus(job?.status === "processing" ? "processing" : "queued");
-        setGeneratorMessage(job?.status === "processing" ? `SHAZAN Demo create kar raha hai… ${Math.max(0, Math.min(99, Number(job.progress) || 0))}%` : "Demo creation queue mein hai…");
+        setGeneratorMessage(job?.status === "processing" ? `SHAZAN create kar raha hai… ${Math.max(0, Math.min(99, Number(job.progress) || 0))}%` : "Real creation queue mein hai…");
         await new Promise((resolve) => window.setTimeout(resolve, 1000));
         const statusResponse = await fetch(`/api/v1/jobs/${encodeURIComponent(job!.id!)}`, { cache: "no-store", credentials: "same-origin" });
         payload = await statusResponse.json().catch(() => ({}));
@@ -1332,7 +1346,7 @@ export default function Home() {
                   ) : generatorOutputType === "file" ? (
                     <>
                       <span className="generator-play"><Icon name="check" size={32} /></span>
-                      <span className="generator-preview-copy"><small>DEMO OUTPUT</small><b>Creation Ready</b><a href={generatorVideoUrl} download>Download Demo Result</a></span>
+                      <span className="generator-preview-copy"><small>CREATION OUTPUT</small><b>Creation Ready</b><a href={generatorVideoUrl} download>Download Result</a></span>
                     </>
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -1420,7 +1434,7 @@ export default function Home() {
       <section className="latest-models-section" aria-labelledby="latest-models-title">
         <div className="latest-models-heading">
           <div>
-            <p className="kicker">LIVE MODEL LIBRARY · JULY 2026</p>
+            <p className="kicker">MODEL LIBRARY · VERIFIED ROLLOUT</p>
             <h2 id="latest-models-title">Every frontier model.<br /><em>One command center.</em></h2>
           </div>
           <p>Switch engines without rebuilding your prompt. Every video model exposes only the input controls it actually supports.</p>
@@ -1474,7 +1488,7 @@ export default function Home() {
 
         <div className="credit-model-tabs" role="tablist" aria-label="Credit model">
           <button className={creditModel === "seedance" ? "active" : ""} onClick={() => selectCreditModel("seedance")} role="tab" aria-selected={creditModel === "seedance"}>
-            <span><Icon name="video" size={20} /></span><b>Seedance 2.0 Standard</b><small>from $0.057/sec</small>
+            <span><Icon name="video" size={20} /></span><b>Seedance 2.0 Standard</b><small>$0.3034/sec · 720p audio</small>
           </button>
           <button className={creditModel === "kling" ? "active" : ""} onClick={() => selectCreditModel("kling")} role="tab" aria-selected={creditModel === "kling"}>
             <span><Icon name="layers" size={20} /></span><b>Kling 3.0 Elements</b><small>from $0.07/sec</small>
@@ -1543,7 +1557,7 @@ export default function Home() {
               <span><small>PUBLIC BASE ESTIMATE</small><b>{creditTotal}</b><em>{creditMath}</em></span>
               <span className="credit-coin"><Icon name="sparkle" size={25} /></span>
             </div>
-            <p className="rate-note">Base public API estimate only; mode and resolution can change actual usage. SHAZAN customer credits will launch only after wallet and rate-lock are connected.</p>
+            <p className="rate-note">Verified provider estimate; actual provider pricing can change. SHAZAN reserves the displayed server estimate, charges once after success, and refunds permanent failures.</p>
           </article>
         </div>
       </section>
@@ -1628,7 +1642,7 @@ export default function Home() {
       <section className="pricing-section" id="pricing">
         <div className="pricing-heading"><p className="kicker">START CREATING</p><h2>Built for the next generation<br />of <em>storytellers.</em></h2><p>Start free. Upgrade when your imagination needs more room.</p></div>
         <div className="price-grid">
-          <article><small>EXPLORER</small><h3>Free</h3><p>Discover the studio and create your first worlds.</p><ul><li><Icon name="check" size={16} /> 100 welcome credits</li><li><Icon name="check" size={16} /> Core image and audio tools</li><li><Icon name="check" size={16} /> Community gallery</li></ul><button onClick={() => goToCreate()}>Start free</button></article>
+          <article><small>EXPLORER</small><h3>Free</h3><p>Discover the studio and create your first worlds.</p><ul><li><Icon name="check" size={16} /> 400 welcome credits</li><li><Icon name="check" size={16} /> Core image and audio tools</li><li><Icon name="check" size={16} /> Community gallery</li></ul><button onClick={() => goToCreate()}>Start free</button></article>
           <article className="popular"><span className="popular-label">MOST POPULAR</span><small>CREATOR</small><h3>₹1,999 <em>/month</em></h3><p>For filmmakers, artists and full-time creators.</p><ul><li><Icon name="check" size={16} /> 3,000 monthly credits</li><li><Icon name="check" size={16} /> All premium models</li><li><Icon name="check" size={16} /> 4K video and commercial use</li><li><Icon name="check" size={16} /> Priority generations</li></ul><button onClick={() => goToCreate()}>Choose Creator</button></article>
           <article><small>STUDIO</small><h3>Custom</h3><p>Shared workspaces, private models and scale.</p><ul><li><Icon name="check" size={16} /> Team workspace</li><li><Icon name="check" size={16} /> Custom model training</li><li><Icon name="check" size={16} /> API and priority support</li></ul><button onClick={() => goToCreate()}>Talk to us</button></article>
         </div>
