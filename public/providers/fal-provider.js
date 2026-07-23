@@ -306,11 +306,19 @@ const outputType = (url, result) => {
   return "image";
 };
 
+export const falKeyFromEnv = (env = {}) => clean(
+  env?.FAL_KEY
+    || env?.FAL_AI_KEY
+    || env?.["Fal ai"]
+    || env?.["Fal AI"],
+  1000,
+);
+
 export class FalProviderAdapter {
   key = "fal";
 
   validateConfiguration(env) {
-    const key = clean(env?.FAL_KEY, 1000);
+    const key = falKeyFromEnv(env);
     return key.length >= 16
       ? { ok: true, mode: "live", secretRequired: true }
       : { ok: false, error: "FAL_KEY production secret configured nahi hai." };
@@ -336,7 +344,7 @@ export class FalProviderAdapter {
   }
 
   async submitJob({ workflow, env, userId }) {
-    const key = clean(env?.FAL_KEY, 1000);
+    const key = falKeyFromEnv(env);
     if (key.length < 16) throw new Error("FAL_KEY production secret configured nahi hai.");
     const references = await resolveReferences(env, key, userId, workflow);
     const task = buildFalTask(workflow, references);
@@ -356,7 +364,7 @@ export class FalProviderAdapter {
   async getJobStatus({ providerRequestId, env }) {
     const encoded = decodeFalRequestId(providerRequestId);
     if (!encoded) throw new Error("Invalid fal.ai provider request ID.");
-    const key = clean(env?.FAL_KEY, 1000);
+    const key = falKeyFromEnv(env);
     if (key.length < 16) throw new Error("FAL_KEY production secret configured nahi hai.");
     const queueBase = (clean(env.FAL_QUEUE_BASE_URL, 300) || DEFAULT_QUEUE_BASE_URL).replace(/\/$/, "");
     const requestBase = `${queueBase}/${encoded.modelPath}/requests/${encodeURIComponent(encoded.requestId)}`;
@@ -376,7 +384,7 @@ export class FalProviderAdapter {
   async cancelJob({ providerRequestId, env }) {
     const encoded = decodeFalRequestId(providerRequestId);
     if (!encoded) return { status: "cancelled", remote: false };
-    const key = clean(env?.FAL_KEY, 1000);
+    const key = falKeyFromEnv(env);
     if (key.length < 16) return { status: "cancelled", remote: false };
     const queueBase = (clean(env.FAL_QUEUE_BASE_URL, 300) || DEFAULT_QUEUE_BASE_URL).replace(/\/$/, "");
     const url = `${queueBase}/${encoded.modelPath}/requests/${encodeURIComponent(encoded.requestId)}/cancel`;
