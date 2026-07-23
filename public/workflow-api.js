@@ -1439,7 +1439,8 @@ const healthState = async (env) => {
   const database = db?.ok === 1;
   const assetStorage = Boolean(env.MEDIA?.put && env.MEDIA?.get);
   const mockProvider = demoEnabled && Number(mockRecord?.enabled) === 1;
-  const falProvider = falEnabled && Number(falRecord?.enabled) === 1 && clean(env.FAL_KEY, 1000).length >= 16;
+  const falKey = env.FAL_KEY || env.FAL_AI_KEY || env["Fal ai"] || env["Fal AI"];
+  const falProvider = falEnabled && Number(falRecord?.enabled) === 1 && clean(falKey, 1000).length >= 16;
   const authSecurity = clean(env.AUTH_PEPPER, 500).length >= 32;
   const production = !["test", "development", "local"].includes(clean(env.APP_ENV, 30).toLowerCase());
   const queueReady = Boolean(env.WORKFLOW_QUEUE?.send);
