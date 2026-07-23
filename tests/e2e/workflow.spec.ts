@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-test("account to durable Prompt → Image → Video → Upscaler → Export workflow", async ({ page }) => {
+test("account to durable Prompt → Image → Output → Export workflow", async ({ page }) => {
   const email = `playwright-${Date.now()}@example.com`;
   await page.goto("/?auth=register&next=/advanced/canvas");
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -16,9 +16,7 @@ test("account to durable Prompt → Image → Video → Upscaler → Export work
   await expect(page.getByText("Node library")).toBeVisible();
   await page.getByRole("button", { name: /New project/i }).click();
   await expect(page.locator(".canvas-node")).toHaveCount(4);
-  await page.getByRole("button", { name: /Video Upscaler/i }).click();
-  await expect(page.locator(".canvas-node")).toHaveCount(5);
-  await expect(page.locator(".edge-layer path")).toHaveCount(4);
+  await expect(page.locator(".edge-layer path")).toHaveCount(3);
   await expect(page.locator(".save-indicator")).toHaveText("Saved");
 
   await page.getByRole("button", { name: /Run workflow/i }).click();
@@ -31,7 +29,8 @@ test("account to durable Prompt → Image → Video → Upscaler → Export work
     const response = await fetch("/api/v1/credits?limit=100", { cache: "no-store" });
     return response.json();
   });
-  expect(creditState.wallet).toMatchObject({ available: 430, reserved: 0, spent: 70 });
+  expect(creditState.wallet).toMatchObject({ available: 488, reserved: 0, spent: 12 });
+  expect(creditState.wallet.available + creditState.wallet.reserved + creditState.wallet.spent).toBe(500);
   expect(creditState.ledger.filter((entry: { entry_type: string }) => entry.entry_type === "charge")).toHaveLength(1);
 
   const downloadPromise = page.waitForEvent("download");

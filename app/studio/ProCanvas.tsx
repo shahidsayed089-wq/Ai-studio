@@ -29,6 +29,23 @@ const nodeCatalog: { type: NodeType; label: string; group: string; icon: string;
 
 const labelFor = (type: NodeType) => nodeCatalog.find((item) => item.type === type)?.label || type;
 const emptyWorkflow: Workflow = { nodes: [], edges: [] };
+const liveModels = [
+  ["gpt_image_2", "GPT Image 2"],
+  ["nano_banana_2", "Nano Banana 2"],
+  ["nano_banana_pro", "Nano Banana Pro"],
+  ["grok_imagine_image", "Grok Imagine Image"],
+  ["flux_2_pro", "FLUX 2 Pro"],
+  ["seedance_2_0_standard", "Seedance 2.0 Standard"],
+  ["seedance_2_0_fast", "Seedance 2.0 Fast"],
+  ["seedance_2_0_mini", "Seedance 2.0 Mini"],
+  ["kling_3_0", "Kling 3.0 Pro"],
+  ["kling_3_0_omni", "Kling 3.0 Omni 4K"],
+  ["gemini_omni_flash", "Gemini Omni Flash"],
+  ["grok_imagine_video_1_5", "Grok Imagine Video 1.5"],
+  ["veo_3_1", "Veo 3.1"],
+  ["happy_horse_1_1", "Happy Horse 1.1"],
+] as const;
+const defaultModelFor = (type: NodeType) => type.includes("video") ? "seedance_2_0_standard" : "gpt_image_2";
 const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, { credentials: "same-origin", ...init, headers: { ...(init?.body && typeof init.body === "string" ? { "Content-Type": "application/json" } : {}), ...(init?.headers || {}) } });
   const text = await response.text();
@@ -64,6 +81,7 @@ export default function ProCanvas() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [testProviderEnabled, setTestProviderEnabled] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedProject = useRef<string>("");
@@ -101,6 +119,7 @@ export default function ProCanvas() {
   const selectProject = useCallback(async (projectId: string) => {
     setError("");
     const result = await api<{ project: Project }>(`/api/v1/projects/${projectId}`);
+    window.localStorage.setItem("shazan.proCanvasProject", result.project.id);
     hydratedProject.current = result.project.id;
     setProject(result.project);
     let nextWorkflow = result.project.workflow;
@@ -134,22 +153,26 @@ export default function ProCanvas() {
     setLoading(true);
     setError("");
     try {
-      const [session, projectList, credits] = await Promise.all([
+      const [session, projectList, credits, features] = await Promise.all([
         api<{ authenticated: boolean; user: User }>("/api/auth/session"),
         api<{ projects: Project[] }>("/api/v1/projects?limit=50"),
         api<{ wallet: Wallet; ledger: LedgerEntry[] }>("/api/v1/credits?limit=100"),
+        api<{ features: Record<string, boolean> }>("/api/v1/features"),
       ]);
       if (!session.authenticated) { window.location.href = "/?auth=login&next=/advanced/canvas"; return; }
       setUser(session.user);
       setWallet(credits.wallet);
       setLedger(credits.ledger);
+      setTestProviderEnabled(features.features.ENABLE_DEMO_PROVIDER === true);
       let list = projectList.projects;
       if (!list.length) {
         const created = await api<{ project: Project }>("/api/v1/projects", { method: "POST", body: JSON.stringify({ name: "My first AI workflow" }) });
         list = [created.project];
       }
       setProjects(list);
-      await selectProject(list[0].id);
+      const rememberedProjectId = window.localStorage.getItem("shazan.proCanvasProject") || "";
+      const initialProject = list.find((item) => item.id === rememberedProjectId) || list[0];
+      await selectProject(initialProject.id);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Studio load failed");
     } finally {
@@ -205,7 +228,7 @@ export default function ProCanvas() {
 
   const mutateWorkflow = (next: Workflow) => { setWorkflow(next); setSaveState("dirty"); setError(""); };
   const addNode = (type: NodeType, position?: { x: number; y: number }) => {
-    const next: WorkflowNode = { id: `${type}-${crypto.randomUUID().slice(0, 8)}`, type, position: position || { x: 120 + workflow.nodes.length * 24, y: 120 + workflow.nodes.length * 18 }, data: type === "text_prompt" ? { prompt: "Describe your cinematic idea" } : type.includes("generator") || type.includes("video") ? { model: "mock-v1" } : {} };
+    const next: WorkflowNode = { id: `${type}-${crypto.randomUUID().slice(0, 8)}`, type, position: position || { x: 120 + workflow.nodes.length * 24, y: 120 + workflow.nodes.length * 18 }, data: type === "text_prompt" ? { prompt: "Describe your cinematic idea" } : type.includes("generator") || type.includes("video") ? { model: defaultModelFor(type) } : {} };
     let nextEdges = workflow.edges;
     if (type === "video_upscaler") {
       const exportNode = workflow.nodes.find((node) => node.type === "download_export");
@@ -282,7 +305,7 @@ export default function ProCanvas() {
         setProject(saved.project); setSaveState("saved"); hydratedProject.current = saved.project.id;
       }
       const idempotencyKey = `run:${project.id}:${crypto.randomUUID()}`;
-      const result = await api<{ job: Job }>(`/api/v1/projects/${project.id}/runs`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ provider: "mock" }) });
+      const result = await api<{ job: Job }>(`/api/v1/projects/${project.id}/runs`, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ provider: testProviderEnabled ? "mock" : "fal" }) });
       setActiveJob(result.job);
       setJobs((current) => [result.job, ...current.filter((job) => job.id !== result.job.id)]);
       await refreshWallet();
@@ -364,7 +387,7 @@ export default function ProCanvas() {
             {workflow.nodes.map((node) => <article className={`canvas-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`} style={{ transform: `translate(${node.position.x}px, ${node.position.y}px)` }} draggable onDragEnd={(event) => { const rect = canvasRef.current?.getBoundingClientRect(); if (rect) moveNode(node.id, event.clientX - rect.left - 105, event.clientY - rect.top - 35); }} onClick={() => { setSelectedNodeId(node.id); setRightOpen(true); }} key={node.id}>
               <button className={`node-port input ${connectingFrom ? "ready" : ""}`} aria-label={`Connect into ${labelFor(node.type)}`} onClick={(event) => { event.stopPropagation(); connectTo(node.id); }} />
               <header><span>{nodeCatalog.find((item) => item.type === node.type)?.icon}</span><i><small>{nodeCatalog.find((item) => item.type === node.type)?.group}</small><b>{labelFor(node.type)}</b></i><button onClick={(event) => { event.stopPropagation(); removeNode(node.id); }} aria-label="Delete node">×</button></header>
-              <div><p>{node.type === "text_prompt" ? String(node.data.prompt || "Enter prompt") : node.type === "image_upload" ? String(node.data.filename || "Select an asset") : String(node.data.model || "Mock Provider")}</p><small>{workflow.edges.filter((edge) => edge.target === node.id).length} in · {workflow.edges.filter((edge) => edge.source === node.id).length} out</small></div>
+              <div><p>{node.type === "text_prompt" ? String(node.data.prompt || "Enter prompt") : node.type === "image_upload" ? String(node.data.filename || "Select an asset") : String(node.data.model || "Live model")}</p><small>{workflow.edges.filter((edge) => edge.target === node.id).length} in · {workflow.edges.filter((edge) => edge.source === node.id).length} out</small></div>
               <button className={`node-port output ${connectingFrom === node.id ? "active" : ""}`} aria-label={`Connect from ${labelFor(node.type)}`} onClick={(event) => { event.stopPropagation(); setConnectingFrom(connectingFrom === node.id ? "" : node.id); }} />
             </article>)}
           </div>
@@ -381,7 +404,7 @@ export default function ProCanvas() {
           <div className="panel-heading"><span><small>CONTROL</small><b>Inspector</b></span><button onClick={() => setRightOpen(false)}>×</button></div>
           <section className="wallet-panel"><header><span><small>AVAILABLE</small><b>{shortCredits(wallet.available)}</b></span><em>credits</em></header><div><span><b>{shortCredits(wallet.reserved)}</b><small>reserved</small></span><span><b>{shortCredits(wallet.spent)}</b><small>spent</small></span></div></section>
           <details className="credit-ledger-panel"><summary><span><small>ATOMIC WALLET</small><b>Credit ledger</b></span><em>{ledger.length} entries</em></summary><div>{ledger.length ? ledger.map((entry) => <article key={entry.id}><span className={entry.entry_type}>{entry.entry_type}</span><i><b>{entry.reason}</b><small>{formatDate(entry.created_at)}{entry.job_id ? ` · ${entry.job_id.slice(0, 8)}` : ""}</small></i><em className={entry.available_delta >= 0 ? "positive" : "negative"}>{entry.available_delta > 0 ? "+" : ""}{entry.available_delta}</em></article>) : <p>No ledger entries.</p>}</div></details>
-          {selectedNode ? <section className="node-inspector"><span className="inspector-node-icon">{nodeCatalog.find((item) => item.type === selectedNode.type)?.icon}</span><small>SELECTED NODE</small><h2>{labelFor(selectedNode.type)}</h2><label><span>Node ID</span><input value={selectedNode.id} readOnly /></label>{selectedNode.type === "text_prompt" && <label><span>Prompt</span><textarea value={String(selectedNode.data.prompt || "")} onChange={(event) => updateSelectedData("prompt", event.target.value)} rows={7} /></label>}{selectedNode.type === "image_upload" && <><label className="asset-upload"><span>Upload image/video</span><input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file); event.currentTarget.value = ""; }} /></label><label><span>Stored asset</span><select value={String(selectedNode.data.asset_id || "")} onChange={(event) => { const asset = assets.find((item) => item.id === event.target.value); updateSelectedData("asset_id", event.target.value); if (asset) updateSelectedData("filename", asset.filename); }}><option value="">Choose asset</option>{assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.filename}</option>)}</select></label></>}{!["text_prompt","image_upload","result_preview","download_export"].includes(selectedNode.type) && <label><span>Provider model</span><select value={String(selectedNode.data.model || "mock-v1")} onChange={(event) => updateSelectedData("model", event.target.value)}>{!["mock-v1","auto"].includes(String(selectedNode.data.model || "mock-v1")) && <option value={String(selectedNode.data.model)}>{String(selectedNode.data.model)} · Mock validation</option>}<option value="mock-v1">SHAZAN Mock v1</option><option value="auto" disabled>Auto (launch phase)</option></select></label>}<button className="delete-node-button" onClick={() => removeNode(selectedNode.id)}>Delete node</button></section> : <section className="inspector-empty"><span>◇</span><h2>Select a node</h2><p>Edit model, prompt and asset inputs here.</p></section>}
+          {selectedNode ? <section className="node-inspector"><span className="inspector-node-icon">{nodeCatalog.find((item) => item.type === selectedNode.type)?.icon}</span><small>SELECTED NODE</small><h2>{labelFor(selectedNode.type)}</h2><label><span>Node ID</span><input value={selectedNode.id} readOnly /></label>{selectedNode.type === "text_prompt" && <label><span>Prompt</span><textarea value={String(selectedNode.data.prompt || "")} onChange={(event) => updateSelectedData("prompt", event.target.value)} rows={7} /></label>}{selectedNode.type === "image_upload" && <><label className="asset-upload"><span>Upload image/video</span><input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file); event.currentTarget.value = ""; }} /></label><label><span>Stored asset</span><select value={String(selectedNode.data.asset_id || "")} onChange={(event) => { const asset = assets.find((item) => item.id === event.target.value); updateSelectedData("asset_id", event.target.value); if (asset) updateSelectedData("filename", asset.filename); }}><option value="">Choose asset</option>{assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.filename}</option>)}</select></label></>}{!["text_prompt","image_upload","result_preview","download_export"].includes(selectedNode.type) && <label><span>Provider model</span><select value={String(selectedNode.data.model || defaultModelFor(selectedNode.type))} onChange={(event) => updateSelectedData("model", event.target.value)}>{liveModels.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>}<button className="delete-node-button" onClick={() => removeNode(selectedNode.id)}>Delete node</button></section> : <section className="inspector-empty"><span>◇</span><h2>Select a node</h2><p>Edit model, prompt and asset inputs here.</p></section>}
           <section className="asset-panel"><header><span><small>DURABLE R2</small><b>Project assets</b></span><label>＋<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAsset(file); event.currentTarget.value = ""; }} /></label></header><div className="asset-filters"><input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Search assets" aria-label="Search assets"/><select value={assetKind} onChange={(event) => setAssetKind(event.target.value)} aria-label="Filter asset type"><option value="">All</option><option value="image">Images</option><option value="video">Videos</option><option value="file">Files</option></select><select value={assetSort} onChange={(event) => setAssetSort(event.target.value as "newest" | "name")} aria-label="Sort assets"><option value="newest">Newest</option><option value="name">Name</option></select></div>{visibleAssets.length ? visibleAssets.slice(0, 50).map((asset) => <article className="asset-row" key={asset.id}><a href={asset.content_url} target="_blank" rel="noreferrer"><span>{asset.kind === "image" ? "▧" : asset.kind === "video" ? "▶" : "↓"}</span><i><b>{asset.filename}</b><small>{asset.source} · {(asset.size_bytes / 1024).toFixed(1)} KB</small></i></a><button onClick={() => deleteAsset(asset)} aria-label={`Delete ${asset.filename}`}>×</button></article>) : <p>No assets match this filter.</p>}</section>
           {user?.role === "admin" && <Link className="admin-link" href="/admin">Open admin dashboard →</Link>}
         </aside>

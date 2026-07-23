@@ -2,7 +2,7 @@
 
 Production-oriented visual AI workflow application built on Next.js static export, Cloudflare Pages Advanced Mode, D1, R2 and a Cloudflare Queue consumer.
 
-The public Studio uses a server-only **fal.ai live adapter**. The adapter submits approved model IDs through fal's persistent queue, stores completed media privately in SHAZAN R2 and captures reserved credits exactly once. **SHAZAN Mock Provider** remains available only for local/automated testing and explicitly selected Pro Canvas demo runs; it is never a production Studio fallback.
+The public Studio uses a server-only **fal.ai live adapter**. The adapter submits approved model IDs through fal's persistent queue, stores completed media privately in SHAZAN R2 and captures reserved credits exactly once. The deterministic adapter exists only inside local/automated test environments and is rejected, hidden and disabled in production.
 
 ## What works
 
@@ -20,7 +20,7 @@ The public Studio uses a server-only **fal.ai live adapter**. The adapter submit
 - Global CSP/HSTS/security headers, request IDs and redacted structured error/slow-request logs.
 - Current-device and all-device logout; verified `ADMIN_EMAIL` bootstrap without a hardcoded password.
 - Live fal.ai generation for verified users, with conservative preflight credit estimates.
-- Explicit Demo metadata whenever Mock is deliberately used: `Demo Output — no paid AI model was called.`
+- No sample users, seeded projects, deterministic assets or test-provider jobs are exposed by production APIs.
 
 ## Architecture
 
@@ -58,7 +58,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-`npm test` runs domain and Miniflare integration tests. The integration suite uses real D1/R2 emulation and verifies authentication, IDOR protection, version persistence, simultaneous-tab deduplication, credit reservation/charge/refund, duplicate webhook handling, admin authorization, cancel/retry and durable download. Playwright refreshes the page while the Mock job is processing and checks the charge occurs exactly once.
+`npm test` runs domain and Miniflare integration tests. The integration suite uses real D1/R2 emulation and a deterministic test-only adapter to verify authentication, IDOR protection, version persistence, simultaneous-tab deduplication, credit reservation/charge/refund, duplicate webhook handling, admin authorization, cancel/retry and durable download.
 
 ## Database
 
@@ -67,6 +67,7 @@ npm run test:e2e
 - `migrations/0003_production_hardening.sql` — feature flags, Runway/MuAPI registry records, durable leases and job-attempt history.
 - `migrations/0004_public_beta_release_lock.sql` — disables payments, community and unverified providers.
 - `migrations/0005_enable_fal_live_generation.sql` — enables only the reviewed fal.ai adapter; all other live providers remain disabled.
+- `migrations/0006_disable_public_mock_data.sql` — disables production test execution, retires pending test jobs, hides old test assets and migrates saved canvas model IDs to live equivalents.
 
 Apply locally:
 
@@ -81,19 +82,6 @@ npx wrangler d1 migrations apply ai-studio-wallet --remote
 ```
 
 The Worker also uses idempotent runtime schema checks so a missing table produces a recoverable initialization instead of exposing provider keys or corrupting a wallet.
-
-## Demo seed
-
-The seed command creates one verified demo creator, one verified admin and a sample Prompt → Image → Video → Upscaler → Export project. Passwords are read from environment and never committed.
-
-```bash
-AUTH_PEPPER='same-as-target-environment' \
-DEMO_USER_PASSWORD='strong-private-password' \
-DEMO_ADMIN_PASSWORD='another-private-password' \
-npm run seed:demo -- --remote
-```
-
-Optional emails: `DEMO_USER_EMAIL` and `DEMO_ADMIN_EMAIL`. Do not use published/default passwords in production.
 
 ## Cloudflare Pages deployment
 

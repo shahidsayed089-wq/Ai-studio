@@ -19,13 +19,13 @@ If the dashboard says a binding name already exists, do not add another one. Com
 
 1. Back up D1.
 2. Run `npm ci && npm run test:all && npm run scan:dependencies`.
-3. Apply every migration through `0004_public_beta_release_lock.sql` remotely.
+3. Apply every migration through `0006_disable_public_mock_data.sql` remotely.
 4. Verify Production secrets and bindings.
 5. Merge/push `main`; wait for Cloudflare Pages deployment success.
-6. Check `/api/v1/health`, register a staging account and execute one Mock workflow.
+6. Check `/api/v1/health`, register a staging account and execute one live fal.ai generation.
 7. Confirm available/reserved/spent balances and exactly one `charge` ledger entry.
 8. Verify protected `/studio` and `/admin`, share link, R2 download and mobile navigation.
-9. Enable live providers one at a time only after staging cost reconciliation.
+9. Keep every provider except the reviewed fal.ai route disabled until staging cost reconciliation.
 
 ## Required production secrets
 
@@ -52,7 +52,7 @@ Verify the remote migration ledger and release locks with `npm run verify:cloudf
 
 ## Queue consumer
 
-Mock execution has a D1/SSE fallback. For true background delivery, create:
+Persistent execution uses a D1/SSE recovery path. For true background delivery, create:
 
 - Queue `shazan-workflow-jobs`
 - Dead-letter queue `shazan-workflow-jobs-dlq`
@@ -87,6 +87,6 @@ Set `PRODUCTION_BASE_URL=https://ai-studio-1n1.pages.dev`, configure two dedicat
 ## Rollback
 
 - Roll back Pages to the previous successful deployment.
-- Disable live providers in `/admin`; Mock Provider stays enabled.
+- Disable the affected live provider in `/admin`; production has no deterministic fallback.
 - Do not delete D1/R2 data during rollback.
 - Inspect `/admin` recent errors and audit logs before retrying.

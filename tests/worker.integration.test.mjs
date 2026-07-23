@@ -21,7 +21,7 @@ const workflow = {
   ],
 };
 
-const makeRuntime = () => new Miniflare({
+const makeRuntime = (bindingOverrides = {}) => new Miniflare({
   modules: true,
   modulesRules: [{ type: "ESModule", include: ["**/*.js"] }],
   scriptPath: "public/_worker.js",
@@ -35,6 +35,7 @@ const makeRuntime = () => new Miniflare({
     WEBHOOK_SECRET: "integration-webhook-secret-0123456789abcdef",
     ADMIN_EMAIL: "founder@example.com",
     APP_ENV: "test",
+    ...bindingOverrides,
   },
 });
 
@@ -211,6 +212,63 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     assert.equal(logoutAll.status, 200);
     assert.equal((await json(await request("/api/auth/session", { cookie: owner.cookie }))).payload.authenticated, false);
     assert.equal((await json(await request("/api/auth/session", { cookie: secondOwnerCookie }))).payload.authenticated, false);
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+test("production mode never exposes or executes deterministic test data", { timeout: 15000 }, async () => {
+  const runtime = makeRuntime({
+    APP_ENV: "production",
+    ENABLE_FAL: "true",
+    FAL_KEY: "production-shaped-fal-key-for-closed-test",
+  });
+  const request = async (path, { method = "GET", cookie = "", body, headers = {} } = {}) => {
+    const init = { method, redirect: "manual", headers: { Origin: ORIGIN, ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...(cookie ? { Cookie: cookie } : {}), ...headers } };
+    if (body !== undefined) init.body = typeof body === "string" ? body : JSON.stringify(body);
+    return runtime.dispatchFetch(`${ORIGIN}${path}`, init);
+  };
+  try {
+    const healthResponse = await request("/api/v1/health");
+    const health = await healthResponse.json();
+    assert.equal(Object.hasOwn(health, "mock_provider"), false);
+    assert.equal(health.public_generation_mode, "fal_live");
+    assert.equal((await request("/workflow-api.js")).status, 404);
+    assert.equal((await request("/providers/mock-provider.js")).status, 404);
+
+    const registration = await request("/api/auth/register", {
+      method: "POST",
+      body: { name: "Live User", email: "live-user@example.com", password: PASSWORD },
+    });
+    assert.equal(registration.status, 201);
+    const cookie = cookieFrom(registration);
+
+    const features = await (await request("/api/v1/features", { cookie })).json();
+    assert.equal(Object.hasOwn(features.features, "ENABLE_DEMO_PROVIDER"), false);
+    const providers = await (await request("/api/v1/providers", { cookie })).json();
+    assert.equal(providers.providers.some((provider) => provider.provider_key === "mock"), false);
+
+    const rejectedProject = await request("/api/v1/projects", {
+      method: "POST",
+      cookie,
+      body: { name: "Rejected test workflow", workflow },
+    });
+    assert.equal(rejectedProject.status, 400);
+
+    const liveProjectResponse = await request("/api/v1/projects", {
+      method: "POST",
+      cookie,
+      body: { name: "Live workflow" },
+    });
+    assert.equal(liveProjectResponse.status, 201);
+    const liveProject = await liveProjectResponse.json();
+    const rejectedRun = await request(`/api/v1/projects/${liveProject.project.id}/runs`, {
+      method: "POST",
+      cookie,
+      headers: { "Idempotency-Key": "production-mock-rejected-0001" },
+      body: { provider: "mock" },
+    });
+    assert.equal(rejectedRun.status, 404);
   } finally {
     await runtime.dispose();
   }

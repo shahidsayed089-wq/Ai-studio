@@ -96,7 +96,7 @@ const workflowInput = (workflow) => {
   const generationNodes = validation.workflow.nodes.filter((node) => [
     "image_generator", "image_to_video", "text_to_video", "video_upscaler",
   ].includes(node.type));
-  if (generationNodes.length !== 1) return { error: "Live fal.ai execution mein exactly one generation node required hai; multi-step Pro Canvas abhi Demo Provider par test karein." };
+  if (generationNodes.length !== 1) return { error: "Live execution mein exactly one generation node required hai. Har generation step ko alag run mein execute karein." };
   const generationNode = generationNodes[0];
   if (!generationNode) return { error: "Generation node required." };
   const model = clean(generationNode.data?.model, 120);

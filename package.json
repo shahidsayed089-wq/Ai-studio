@@ -12,15 +12,14 @@
     "deploy": "npm run build && wrangler pages deploy",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern playwright-report --ignore-pattern test-results",
     "test": "node --test tests/domain.test.mjs tests/worker.integration.test.mjs",
-    "test:e2e": "playwright test",
+    "test:e2e": "node scripts/run-playwright.mjs",
     "test:ui-freeze": "node scripts/check-ui-freeze.mjs",
     "scan:client-secrets": "node scripts/scan-client-secrets.mjs out",
     "scan:dependencies": "npm audit --omit=dev --audit-level=high",
     "test:all": "npm run test:ui-freeze && npm run lint && npm run test && npm run build && npm run scan:client-secrets && npm run test:e2e",
     "test:production-smoke": "node scripts/production-smoke.mjs",
     "test:load": "node scripts/load-test.mjs",
-    "verify:cloudflare": "node scripts/cloudflare-verify.mjs",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "verify:cloudflare": "node scripts/cloudflare-verify.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -48,7 +47,7 @@
     "wrangler": "4.113.0"
   },
   "overrides": {
-    "postcss": "8.5.10",
+    "postcss": "8.5.22",
     "sharp": "0.35.0"
   },
   "type": "module",

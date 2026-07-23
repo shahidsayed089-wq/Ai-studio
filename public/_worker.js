@@ -1383,6 +1383,12 @@ const securityHeaders = (response, requestId) => {
 
 const routeRequest = async (request, env) => {
     const { pathname } = new URL(request.url);
+    if (
+      pathname === "/_worker.js"
+      || pathname === "/workflow-api.js"
+      || pathname === "/workflow-domain.js"
+      || pathname.startsWith("/providers/")
+    ) return json({ error: "Not found." }, 404);
     if (pathname === "/api/health") return handleWorkflowApi(request, env, "/api/v1/health", { json, getSession, sameOriginMutationError });
     if (pathname === "/api/health/ready") return handleWorkflowApi(request, env, "/api/v1/health/ready", { json, getSession, sameOriginMutationError });
     if (pathname === "/api/auth" || pathname.startsWith("/api/auth/")) return handleAuth(request, env, pathname);

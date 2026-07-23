@@ -284,6 +284,10 @@ export const FEATURE_DEFAULTS = Object.freeze({
   ENABLE_MUAPI: false,
 });
 
+const isTestLikeEnvironment = (env) => ["test", "development", "local"].includes(
+  typeof env?.APP_ENV === "string" ? env.APP_ENV.trim().toLowerCase() : "",
+);
+
 export const RELEASE_LOCKED_OFF = Object.freeze([
   "ENABLE_LIVE_PAYMENTS", "ENABLE_COMMUNITY", "ENABLE_KIE", "ENABLE_OPENAI",
   "ENABLE_GOOGLE_AI", "ENABLE_XAI", "ENABLE_HEYGEN", "ENABLE_RUNWAY", "ENABLE_MUAPI",
@@ -310,6 +314,7 @@ const envBoolean = (value) => {
 
 export const featureEnabled = async (env, flagKey) => {
   if (!(flagKey in FEATURE_DEFAULTS)) return false;
+  if (flagKey === "ENABLE_DEMO_PROVIDER" && !isTestLikeEnvironment(env)) return false;
   if (RELEASE_LOCKED_OFF.includes(flagKey)) return false;
   const override = envBoolean(env?.[flagKey]);
   if (override !== null) return override;
@@ -380,7 +385,7 @@ const getActor = async (request, env, ctx, requireRole) => {
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,CASE WHEN ?='admin' THEN 'admin' ELSE 'user' END,?,?)").bind(userId, session.row.role, timestamp, timestamp),
     env.DB.prepare("INSERT OR IGNORE INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,500,0,0,?)").bind(userId, timestamp),
-    env.DB.prepare("INSERT OR IGNORE INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at) VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account demo credits',?)").bind(id(), userId, userId, timestamp),
+    env.DB.prepare("INSERT OR IGNORE INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at) VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account welcome credits',?)").bind(id(), userId, userId, timestamp),
   ]);
   const profile = await env.DB.prepare(`SELECT p.role,w.available,w.reserved,w.spent,u.email,u.display_name,u.status,u.email_verified
     FROM shazan_user_profiles_v1 p JOIN shazan_credit_wallets_v1 w ON w.user_id=p.user_id
@@ -404,16 +409,18 @@ const publicProject = (row) => ({
 const defaultWorkflow = () => ({
   nodes: [
     { id: "prompt-1", type: "text_prompt", position: { x: 80, y: 160 }, data: { prompt: "A cinematic world at golden hour" } },
-    { id: "image-1", type: "image_generator", position: { x: 360, y: 160 }, data: { model: "mock-image-v1" } },
-    { id: "video-1", type: "image_to_video", position: { x: 640, y: 160 }, data: { model: "mock-video-v1" } },
-    { id: "export-1", type: "download_export", position: { x: 920, y: 160 }, data: { format: "json" } },
+    { id: "image-1", type: "image_generator", position: { x: 360, y: 160 }, data: { model: "gpt_image_2" } },
+    { id: "output-1", type: "result_preview", position: { x: 640, y: 160 }, data: { label: "Output" } },
+    { id: "export-1", type: "download_export", position: { x: 920, y: 160 }, data: { format: "png" } },
   ],
   edges: [
     { id: "edge-1", source: "prompt-1", target: "image-1", kind: "text" },
-    { id: "edge-2", source: "image-1", target: "video-1", kind: "image" },
-    { id: "edge-3", source: "video-1", target: "export-1", kind: "video" },
+    { id: "edge-2", source: "image-1", target: "output-1", kind: "image" },
+    { id: "edge-3", source: "output-1", target: "export-1", kind: "image" },
   ],
 });
+
+const containsTestWorkflowData = (workflow) => JSON.stringify(workflow || {}).toLowerCase().includes('"mock');
 
 const quickCreationWorkflow = ({ mode, model, prompt, aspectRatio, resolution, duration, referenceAssets, demo = false }) => {
   const safeMode = ["image", "video", "music", "voice", "avatar"].includes(mode) ? mode : "image";
@@ -476,6 +483,7 @@ const createProject = async (request, env, ctx, actor) => {
   const description = clean(body.value.description, 500);
   if (name.length < 2) return apiError(ctx, 400, "Project name 2–80 characters required");
   const workflow = body.value.workflow || defaultWorkflow();
+  if (!isTestLikeEnvironment(env) && containsTestWorkflowData(workflow)) return apiError(ctx, 400, "Unsupported workflow model");
   const validation = validateWorkflow(workflow);
   if (!validation.ok) return apiError(ctx, 400, "Invalid workflow", validation.error);
   const canonical = canonicalWorkflow(validation.workflow);
@@ -520,6 +528,7 @@ const saveWorkflow = async (request, env, ctx, actor, projectId) => {
   if (Number.isFinite(baseVersion) && baseVersion !== Number(row.current_version)) {
     return apiError(ctx, 409, "Workflow version conflict", "Project dusre tab mein update hua hai. Latest version reload karein.", { current_version: Number(row.current_version) });
   }
+  if (!isTestLikeEnvironment(env) && containsTestWorkflowData(body.value.workflow)) return apiError(ctx, 400, "Unsupported workflow model");
   const validation = validateWorkflow(body.value.workflow);
   if (!validation.ok) return apiError(ctx, 400, "Invalid workflow", validation.error);
   const canonical = canonicalWorkflow(validation.workflow);
@@ -655,6 +664,7 @@ const listAssets = async (request, env, ctx, actor) => {
   const search = clean(url.searchParams.get("q"), 80).replace(/[%_]/g, "");
   const clauses = ["owner_id=?", "deleted_at IS NULL"];
   const bindings = [actor.id];
+  if (!isTestLikeEnvironment(env)) clauses.push("source<>'mock'");
   if (kind) { clauses.push("kind=?"); bindings.push(kind); }
   if (projectId) { clauses.push("project_id=?"); bindings.push(projectId); }
   if (search) { clauses.push("filename LIKE ?"); bindings.push(`%${search}%`); }
@@ -665,7 +675,7 @@ const listAssets = async (request, env, ctx, actor) => {
 
 const getAssetContent = async (env, ctx, actor, assetId) => {
   const row = await env.DB.prepare("SELECT * FROM shazan_assets_v1 WHERE id=? AND owner_id=? AND deleted_at IS NULL LIMIT 1").bind(assetId, actor.id).first();
-  if (!row) return apiError(ctx, 404, "Asset not found");
+  if (!row || (!isTestLikeEnvironment(env) && row.source === "mock")) return apiError(ctx, 404, "Asset not found");
   const object = await env.MEDIA.get(row.r2_key);
   if (!object) return apiError(ctx, 404, "Asset data not found");
   const headers = new Headers({ "Content-Type": row.content_type, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" });
@@ -675,8 +685,8 @@ const getAssetContent = async (env, ctx, actor, assetId) => {
 };
 
 const deleteAsset = async (env, ctx, actor, assetId) => {
-  const row = await env.DB.prepare("SELECT r2_key FROM shazan_assets_v1 WHERE id=? AND owner_id=? AND deleted_at IS NULL LIMIT 1").bind(assetId, actor.id).first();
-  if (!row) return apiError(ctx, 404, "Asset not found");
+  const row = await env.DB.prepare("SELECT r2_key,source FROM shazan_assets_v1 WHERE id=? AND owner_id=? AND deleted_at IS NULL LIMIT 1").bind(assetId, actor.id).first();
+  if (!row || (!isTestLikeEnvironment(env) && row.source === "mock")) return apiError(ctx, 404, "Asset not found");
   await env.MEDIA.delete(row.r2_key);
   await env.DB.prepare("UPDATE shazan_assets_v1 SET deleted_at=? WHERE id=? AND owner_id=?").bind(now(), assetId, actor.id).run();
   return new Response(null, { status: 204 });
@@ -710,7 +720,8 @@ const createWorkflowRun = async (request, env, ctx, actor, projectId) => {
   if (!project) return apiError(ctx, 404, "Project not found");
   const body = await readBody(request, ctx);
   if (body.error) return body.error;
-  const providerKey = clean(body.value.provider, 40) || "mock";
+  const providerKey = clean(body.value.provider, 40) || (isTestLikeEnvironment(env) ? "mock" : "fal");
+  if (providerKey === "mock" && !isTestLikeEnvironment(env)) return apiError(ctx, 404, "Provider not found");
   const providerFlag = PROVIDER_FLAGS[providerKey];
   if (!providerFlag) return apiError(ctx, 400, "Unknown provider");
   if (!await featureEnabled(env, providerFlag)) return apiError(ctx, 503, "Provider feature disabled", `${providerFlag} is disabled server-side.`);
@@ -805,12 +816,12 @@ const createQuickCreation = async (request, env, ctx, actor) => {
   let referenceAssets = [];
   if (requestedIds.length) {
     const placeholders = requestedIds.map(() => "?").join(",");
-    const result = await env.DB.prepare(`SELECT id,kind,filename FROM shazan_assets_v1 WHERE owner_id=? AND deleted_at IS NULL AND id IN (${placeholders})`).bind(actor.id, ...requestedIds).all();
+    const result = await env.DB.prepare(`SELECT id,kind,filename FROM shazan_assets_v1 WHERE owner_id=? AND deleted_at IS NULL${isTestLikeEnvironment(env) ? "" : " AND source<>'mock'"} AND id IN (${placeholders})`).bind(actor.id, ...requestedIds).all();
     referenceAssets = result.results || [];
     if (referenceAssets.length !== requestedIds.length) return apiError(ctx, 404, "Reference asset not found");
   }
 
-  const localEnvironment = ["test", "development", "local"].includes(clean(env.APP_ENV, 30).toLowerCase());
+  const localEnvironment = isTestLikeEnvironment(env);
   const providerKey = localEnvironment ? "mock" : "fal";
   const workflow = quickCreationWorkflow({ mode, model, prompt, aspectRatio, resolution, duration, referenceAssets, demo: providerKey === "mock" });
   const validation = validateWorkflow(workflow);
@@ -1022,6 +1033,15 @@ const failOrResubmitLiveJob = async (env, job, adapter, message) => {
 export const processPersistentJob = async (env, jobId, userId) => {
   let job = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
   if (!job || ["completed","failed","cancelled"].includes(job.status)) return job;
+  if (job.provider_key === "mock" && !isTestLikeEnvironment(env)) {
+    const timestamp = now();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE shazan_jobs_v1 SET status='cancelled',cancelled_at=?,updated_at=?,last_error='Legacy test job retired' WHERE id=? AND user_id=? AND status IN ('queued','processing')")
+        .bind(timestamp, timestamp, jobId, userId),
+      createJobEvent(env.DB, jobId, "cancelled", Number(job.progress), "Legacy test job retired; reserved credits refunded", timestamp),
+    ]);
+    return env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, userId).first();
+  }
   const timestamp = now();
   if (job.status === "queued" && Number(job.next_attempt_at || 0) > timestamp) return job;
 
@@ -1113,6 +1133,7 @@ const listJobs = async (request, env, ctx, actor) => {
   const provider = clean(url.searchParams.get("provider"), 40);
   const clauses = ["user_id=?"];
   const bindings = [actor.id];
+  if (!isTestLikeEnvironment(env)) clauses.push("provider_key<>'mock'");
   if (status) { clauses.push("status=?"); bindings.push(status); }
   if (projectId) { clauses.push("project_id=?"); bindings.push(projectId); }
   if (provider) { clauses.push("provider_key=?"); bindings.push(provider); }
@@ -1122,6 +1143,8 @@ const listJobs = async (request, env, ctx, actor) => {
 };
 
 const getJob = async (env, ctx, actor, jobId) => {
+  const visible = await env.DB.prepare("SELECT provider_key FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, actor.id).first();
+  if (!visible || (!isTestLikeEnvironment(env) && visible.provider_key === "mock")) return apiError(ctx, 404, "Job not found");
   const row = await processPersistentJob(env, jobId, actor.id);
   if (!row) return apiError(ctx, 404, "Job not found");
   const events = await env.DB.prepare("SELECT status,progress,message,created_at FROM shazan_job_events_v1 WHERE job_id=? ORDER BY created_at ASC LIMIT 100").bind(jobId).all();
@@ -1130,7 +1153,7 @@ const getJob = async (env, ctx, actor, jobId) => {
 
 const cancelJob = async (env, ctx, actor, jobId) => {
   const row = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, actor.id).first();
-  if (!row) return apiError(ctx, 404, "Job not found");
+  if (!row || (!isTestLikeEnvironment(env) && row.provider_key === "mock")) return apiError(ctx, 404, "Job not found");
   if (!["queued","processing"].includes(row.status)) return apiError(ctx, 409, "Job cannot be cancelled", `Current status: ${row.status}`);
   const adapter = getProviderAdapter(row.provider_key);
   if (!adapter) return apiError(ctx, 503, "Provider adapter unavailable");
@@ -1152,7 +1175,7 @@ const cancelJob = async (env, ctx, actor, jobId) => {
 
 const retryJob = async (request, env, ctx, actor, jobId) => {
   const previous = await env.DB.prepare("SELECT * FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, actor.id).first();
-  if (!previous) return apiError(ctx, 404, "Job not found");
+  if (!previous || (!isTestLikeEnvironment(env) && previous.provider_key === "mock")) return apiError(ctx, 404, "Job not found");
   if (!["failed","cancelled"].includes(previous.status)) return apiError(ctx, 409, "Only failed or cancelled jobs can be retried");
   const headerKey = clean(request.headers.get("Idempotency-Key"), 120);
   const idempotencyKey = headerKey || `retry:${jobId}:${id()}`;
@@ -1204,8 +1227,8 @@ const retryJob = async (request, env, ctx, actor, jobId) => {
 };
 
 const jobEventStream = async (request, env, ctx, actor, jobId) => {
-  const exists = await env.DB.prepare("SELECT id FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, actor.id).first();
-  if (!exists) return apiError(ctx, 404, "Job not found");
+  const exists = await env.DB.prepare("SELECT id,provider_key FROM shazan_jobs_v1 WHERE id=? AND user_id=? LIMIT 1").bind(jobId, actor.id).first();
+  if (!exists || (!isTestLikeEnvironment(env) && exists.provider_key === "mock")) return apiError(ctx, 404, "Job not found");
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false;
@@ -1233,7 +1256,13 @@ const getCredits = async (request, env, ctx, actor) => {
   const url = new URL(request.url);
   const { page, limit } = safePagination(url.searchParams);
   const wallet = await env.DB.prepare("SELECT available,reserved,spent,updated_at FROM shazan_credit_wallets_v1 WHERE user_id=? LIMIT 1").bind(actor.id).first();
-  const ledger = await env.DB.prepare("SELECT id,job_id,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at FROM shazan_credit_ledger_v1 WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?").bind(actor.id, limit, (page - 1) * limit).all();
+  const ledger = isTestLikeEnvironment(env)
+    ? await env.DB.prepare("SELECT id,job_id,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at FROM shazan_credit_ledger_v1 WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?").bind(actor.id, limit, (page - 1) * limit).all()
+    : await env.DB.prepare(`SELECT l.id,l.job_id,l.entry_type,l.available_delta,l.reserved_delta,l.spent_delta,l.reason,l.created_at
+      FROM shazan_credit_ledger_v1 l
+      LEFT JOIN shazan_jobs_v1 j ON j.id=l.job_id
+      WHERE l.user_id=? AND (l.job_id IS NULL OR j.provider_key<>'mock')
+      ORDER BY l.created_at DESC LIMIT ? OFFSET ?`).bind(actor.id, limit, (page - 1) * limit).all();
   return ctx.json({ wallet, ledger: ledger.results || [], page, limit });
 };
 
@@ -1246,13 +1275,15 @@ const auditStatement = async (request, env, actor, action, targetType, targetId,
 
 const adminMetrics = async (env, ctx) => {
   const since = now() - 30 * 86400;
+  const publicOnly = isTestLikeEnvironment(env) ? "" : " WHERE provider_key<>'mock'";
+  const publicOnlyAnd = isTestLikeEnvironment(env) ? "" : " AND provider_key<>'mock'";
   const results = await env.DB.batch([
-    env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_auth_users_v2"),
-    env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_auth_users_v2 WHERE last_login_at>=?").bind(since),
-    env.DB.prepare("SELECT COUNT(*) AS value FROM shazan_jobs_v1"),
-    env.DB.prepare("SELECT status,COUNT(*) AS count FROM shazan_jobs_v1 GROUP BY status"),
-    env.DB.prepare("SELECT provider_key,COUNT(*) AS jobs,SUM(CASE WHEN status='completed' THEN estimated_credits ELSE 0 END) AS charged_credits FROM shazan_jobs_v1 GROUP BY provider_key"),
-    env.DB.prepare("SELECT id,provider_key,last_error,updated_at FROM shazan_jobs_v1 WHERE status='failed' ORDER BY updated_at DESC LIMIT 20"),
+    env.DB.prepare(`SELECT COUNT(*) AS value FROM shazan_auth_users_v2${isTestLikeEnvironment(env) ? "" : " WHERE lower(email)<>'demo@shazan.ai'"}`),
+    env.DB.prepare(`SELECT COUNT(*) AS value FROM shazan_auth_users_v2 WHERE last_login_at>=?${isTestLikeEnvironment(env) ? "" : " AND lower(email)<>'demo@shazan.ai'"}`).bind(since),
+    env.DB.prepare(`SELECT COUNT(*) AS value FROM shazan_jobs_v1${publicOnly}`),
+    env.DB.prepare(`SELECT status,COUNT(*) AS count FROM shazan_jobs_v1${publicOnly} GROUP BY status`),
+    env.DB.prepare(`SELECT provider_key,COUNT(*) AS jobs,SUM(CASE WHEN status='completed' THEN estimated_credits ELSE 0 END) AS charged_credits FROM shazan_jobs_v1${publicOnly} GROUP BY provider_key`),
+    env.DB.prepare(`SELECT id,provider_key,last_error,updated_at FROM shazan_jobs_v1 WHERE status='failed'${publicOnlyAnd} ORDER BY updated_at DESC LIMIT 20`),
   ]);
   const statusRows = results[3]?.results || [];
   const statusMap = Object.fromEntries(statusRows.map((row) => [row.status, Number(row.count)]));
@@ -1273,7 +1304,10 @@ const adminUsers = async (request, env, ctx) => {
   const url = new URL(request.url);
   const { page, limit } = safePagination(url.searchParams);
   const search = clean(url.searchParams.get("q"), 80).replace(/[%_]/g, "");
-  const where = search ? "WHERE u.email LIKE ? OR u.display_name LIKE ?" : "";
+  const conditions = [];
+  if (!isTestLikeEnvironment(env)) conditions.push("lower(u.email)<>'demo@shazan.ai'");
+  if (search) conditions.push("(u.email LIKE ? OR u.display_name LIKE ?)");
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const statement = env.DB.prepare(`SELECT u.id,u.email,u.display_name,u.status,u.email_verified,u.created_at,u.last_login_at,
     COALESCE(p.role,u.role) AS role,COALESCE(w.available,0) AS available,COALESCE(w.reserved,0) AS reserved,COALESCE(w.spent,0) AS spent
     FROM shazan_auth_users_v2 u LEFT JOIN shazan_user_profiles_v1 p ON p.user_id=u.id LEFT JOIN shazan_credit_wallets_v1 w ON w.user_id=u.id
@@ -1325,7 +1359,7 @@ const adminAdjustCredits = async (request, env, ctx, actor, userId) => {
 };
 
 const listProviders = async (env, ctx) => {
-  const result = await env.DB.prepare("SELECT provider_key,display_name,enabled,mode,updated_at FROM shazan_providers_v1 ORDER BY display_name").all();
+  const result = await env.DB.prepare(`SELECT provider_key,display_name,enabled,mode,updated_at FROM shazan_providers_v1${isTestLikeEnvironment(env) ? "" : " WHERE provider_key<>'mock'"} ORDER BY display_name`).all();
   const providers = await Promise.all((result.results || []).map(async (provider) => ({
     ...provider,
     effective_enabled: Boolean(provider.enabled) && await featureEnabled(env, PROVIDER_FLAGS[provider.provider_key]),
@@ -1334,12 +1368,15 @@ const listProviders = async (env, ctx) => {
   return ctx.json({ providers });
 };
 
-const featureSnapshot = async (env) => Object.fromEntries(await Promise.all(Object.keys(FEATURE_DEFAULTS).map(async (flagKey) => [flagKey, await featureEnabled(env, flagKey)])));
+const featureSnapshot = async (env) => {
+  const keys = Object.keys(FEATURE_DEFAULTS).filter((flagKey) => isTestLikeEnvironment(env) || flagKey !== "ENABLE_DEMO_PROVIDER");
+  return Object.fromEntries(await Promise.all(keys.map(async (flagKey) => [flagKey, await featureEnabled(env, flagKey)])));
+};
 
 const listFeatures = async (env, ctx) => ctx.json({ features: await featureSnapshot(env) });
 
 const adminFeatureFlags = async (env, ctx) => {
-  const rows = await env.DB.prepare("SELECT flag_key,enabled,description,updated_by,updated_at FROM shazan_feature_flags_v1 ORDER BY flag_key").all();
+  const rows = await env.DB.prepare(`SELECT flag_key,enabled,description,updated_by,updated_at FROM shazan_feature_flags_v1${isTestLikeEnvironment(env) ? "" : " WHERE flag_key<>'ENABLE_DEMO_PROVIDER'"} ORDER BY flag_key`).all();
   const flags = await Promise.all((rows.results || []).map(async (row) => ({
     ...row,
     effective_enabled: await featureEnabled(env, row.flag_key),
@@ -1350,6 +1387,7 @@ const adminFeatureFlags = async (env, ctx) => {
 
 const adminUpdateFeature = async (request, env, ctx, actor, flagKey) => {
   if (!(flagKey in FEATURE_DEFAULTS)) return apiError(ctx, 404, "Feature flag not found");
+  if (flagKey === "ENABLE_DEMO_PROVIDER" && !isTestLikeEnvironment(env)) return apiError(ctx, 404, "Feature flag not found");
   if (RELEASE_LOCKED_OFF.includes(flagKey)) return apiError(ctx, 409, "Feature is release-locked off", `${flagKey} requires a reviewed code release; it cannot be enabled from the database or admin API.`);
   if (envBoolean(env[flagKey]) !== null) return apiError(ctx, 409, "Feature flag controlled by environment", `${flagKey} must be changed in Cloudflare environment configuration.`);
   const body = await readBody(request, ctx);
@@ -1366,6 +1404,7 @@ const adminUpdateFeature = async (request, env, ctx, actor, flagKey) => {
 };
 
 const adminUpdateProvider = async (request, env, ctx, actor, providerKey) => {
+  if (providerKey === "mock" && !isTestLikeEnvironment(env)) return apiError(ctx, 404, "Provider not found");
   const current = await env.DB.prepare("SELECT * FROM shazan_providers_v1 WHERE provider_key=? LIMIT 1").bind(providerKey).first();
   if (!current) return apiError(ctx, 404, "Provider not found");
   const body = await readBody(request, ctx);
@@ -1399,6 +1438,7 @@ const adminAuditLogs = async (request, env, ctx) => {
 };
 
 const webhook = async (request, env, ctx, providerKey) => {
+  if (providerKey === "mock" && !isTestLikeEnvironment(env)) return apiError(ctx, 404, "Webhook not found");
   const configured = clean(env.WEBHOOK_SECRET, 300);
   const received = clean(request.headers.get("X-Webhook-Secret"), 300);
   if (configured.length < 32 || received.length !== configured.length || await sha256(received) !== await sha256(configured)) return apiError(ctx, 401, "Invalid webhook signature");
@@ -1438,11 +1478,11 @@ const healthState = async (env) => {
   const livePayments = await featureEnabled(env, "ENABLE_LIVE_PAYMENTS");
   const database = db?.ok === 1;
   const assetStorage = Boolean(env.MEDIA?.put && env.MEDIA?.get);
-  const mockProvider = demoEnabled && Number(mockRecord?.enabled) === 1;
+  const production = !isTestLikeEnvironment(env);
+  const mockProvider = !production && demoEnabled && Number(mockRecord?.enabled) === 1;
   const falKey = env.FAL_KEY || env.FAL_AI_KEY || env.ENABLE_FAL || env["Fal ai"] || env["Fal AI"];
   const falProvider = falEnabled && Number(falRecord?.enabled) === 1 && clean(falKey, 1000).length >= 16;
   const authSecurity = clean(env.AUTH_PEPPER, 500).length >= 32;
-  const production = !["test", "development", "local"].includes(clean(env.APP_ENV, 30).toLowerCase());
   const queueReady = Boolean(env.WORKFLOW_QUEUE?.send);
   const googleConfigured = await featureEnabled(env, "ENABLE_GOOGLE_AUTH") && Boolean(clean(env.GOOGLE_CLIENT_ID, 500) && clean(env.GOOGLE_CLIENT_SECRET, 500));
   const emailConfigured = Boolean(clean(env.RESEND_API_KEY, 500) && clean(env.AUTH_EMAIL_FROM, 500));
@@ -1472,7 +1512,7 @@ const healthState = async (env) => {
     core_ready: coreReady,
     launch_gates: launchGates,
     job_queue: queueReady ? "cloudflare_queue" : "durable_d1_fallback",
-    mock_provider: mockProvider,
+    ...(production ? {} : { mock_provider: mockProvider }),
     fal_provider: falProvider,
     public_generation_mode: production ? "fal_live" : "mock_demo",
     authentication: authSecurity,
