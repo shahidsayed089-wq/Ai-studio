@@ -357,7 +357,7 @@ const modelCatalog: Record<Mode, CatalogModel[]> = {
   ],
   video: [
     { name: "Seedance 2.0 Standard", maker: "BYTEDANCE", tag: "1080p+", art: "gold", features: ["9 image + 3 video + 3 audio", "Highest-fidelity native A/V"], credits: "verified fal.ai rate · $0.3034/sec at 720p" },
-    { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["Unified multimodal inputs", "480p / 720p high volume"], credits: "live rate checked before launch" },
+    { name: "Seedance 2.0 Fast", maker: "BYTEDANCE", tag: "Fast", art: "coral", features: ["Unified multimodal inputs", "480p / 720p high volume"], credits: "verified fal.ai rate · $0.2419/sec at 720p" },
     { name: "Seedance 2.0 Mini", maker: "BYTEDANCE · KIE", tag: "Fallback", art: "ice", features: ["Kie API route", "Fast drafts + iteration"], credits: "live rate checked before launch" },
     { name: "Gemini Omni Flash", maker: "GOOGLE", tag: "New", art: "world", features: ["Text or image references", "Synchronized audio · 3–10s"] },
     { name: "Grok Imagine Video 1.5", maker: "XAI", tag: "1.5", art: "coral", features: ["First-frame image required", "Audio · up to 1080p"] },
@@ -814,7 +814,7 @@ export default function Home() {
         const job = payload.job;
         if (job?.status === "completed" && job.result_url) {
           setGeneratorVideoUrl(job.result_url);
-          setGeneratorOutputType("file");
+          setGeneratorOutputType(activeMode === "image" ? "image" : "video");
           setGeneratorStatus("completed");
           setGeneratorMessage("Real creation ready hai — private preview aur download available hai.");
           return;
