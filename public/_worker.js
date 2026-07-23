@@ -9,6 +9,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const AUTH_COOKIE = "__Host-shazan_session";
 const AUTH_SESSION_SECONDS = 30 * 24 * 60 * 60;
 const AUTH_PBKDF2_ITERATIONS = 30000;
+const WELCOME_CREDITS = 400;
 
 const AUTH_SCHEMA_STATEMENTS = [`CREATE TABLE IF NOT EXISTS shazan_auth_users_v2 (
   id TEXT PRIMARY KEY,
@@ -686,19 +687,19 @@ const handleAuthRegister = async (request, env, db, pepper) => {
   try {
     await db.batch([
       db.prepare(`INSERT INTO shazan_auth_users_v2 (id, email, display_name, password_hash, password_salt, role, status, credits, email_verified, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'user', 'active', 500, 0, ?, ?)`)
-        .bind(userId, email, displayName, passwordHash, salt, current, current),
+        VALUES (?, ?, ?, ?, ?, 'user', 'active', ?, 0, ?, ?)`)
+        .bind(userId, email, displayName, passwordHash, salt, WELCOME_CREDITS, current, current),
       db.prepare("INSERT INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,'user',?,?)").bind(userId, current, current),
-      db.prepare("INSERT INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,500,0,0,?)").bind(userId, current),
+      db.prepare("INSERT INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,?,0,0,?)").bind(userId, WELCOME_CREDITS, current),
       db.prepare(`INSERT INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
-        VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account demo credits',?)`).bind(crypto.randomUUID(), userId, userId, current),
+        VALUES(?,?,'signup:'||?,'grant',?,0,0,'New account welcome credits',?)`).bind(crypto.randomUUID(), userId, userId, WELCOME_CREDITS, current),
     ]);
   } catch (error) {
     if (/unique|constraint/i.test(String(error?.message || error))) return json({ error: "Is email ka account already hai. Sign in karein." }, 409);
     throw error;
   }
   const token = await createSession(db, userId);
-  return json({ authenticated: true, user: { id: userId, email, name: displayName, role: "user", credits: 500 } }, 201, {
+  return json({ authenticated: true, user: { id: userId, email, name: displayName, role: "user", credits: WELCOME_CREDITS } }, 201, {
     "Set-Cookie": sessionCookie(token),
   });
 };
@@ -926,11 +927,11 @@ const handleGoogleCallback = async (request, env, db) => {
     const statements = [];
     if (!user) {
       statements.push(db.prepare(`INSERT INTO shazan_auth_users_v2(id,email,display_name,password_hash,password_salt,role,status,credits,email_verified,created_at,updated_at)
-        VALUES(?,?,?,'oauth_only','oauth_only',?,'active',500,1,?,?)`).bind(userId, email, displayName, initialRole, current, current));
+        VALUES(?,?,?,'oauth_only','oauth_only',?,'active',?,1,?,?)`).bind(userId, email, displayName, initialRole, WELCOME_CREDITS, current, current));
       statements.push(db.prepare("INSERT INTO shazan_user_profiles_v1(user_id,role,created_at,updated_at) VALUES(?,?,?,?)").bind(userId, initialRole, current, current));
-      statements.push(db.prepare("INSERT INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,500,0,0,?)").bind(userId, current));
+      statements.push(db.prepare("INSERT INTO shazan_credit_wallets_v1(user_id,available,reserved,spent,updated_at) VALUES(?,?,0,0,?)").bind(userId, WELCOME_CREDITS, current));
       statements.push(db.prepare(`INSERT INTO shazan_credit_ledger_v1(id,user_id,event_key,entry_type,available_delta,reserved_delta,spent_delta,reason,created_at)
-        VALUES(?,?,'signup:'||?,'grant',500,0,0,'New account demo credits',?)`).bind(crypto.randomUUID(), userId, userId, current));
+        VALUES(?,?,'signup:'||?,'grant',?,0,0,'New account welcome credits',?)`).bind(crypto.randomUUID(), userId, userId, WELCOME_CREDITS, current));
     } else {
       statements.push(db.prepare("UPDATE shazan_auth_users_v2 SET email_verified=1,updated_at=? WHERE id=?").bind(current, userId));
       if (initialRole === "admin") {
@@ -1338,6 +1339,80 @@ const handleStatus = async (request, env, falKey, kieKey, requestId) => {
   return handleKieStatus(request, env, kieKey, requestId);
 };
 
+const loadFalReferenceUrls = async (env, userId, assetIds) => {
+  const urls = { images: [], videos: [], audio: [] };
+  for (const assetId of assetIds.slice(0, 15)) {
+    const asset = await env.DB.prepare("SELECT id,owner_id,content_type,r2_key,filename FROM shazan_assets_v1 WHERE id=? AND owner_id=? AND deleted_at IS NULL LIMIT 1")
+      .bind(assetId, userId).first();
+    if (!asset) throw new Error("Reference asset not found.");
+    const object = await env.MEDIA?.get(asset.r2_key);
+    if (!object) throw new Error("Reference asset data not found.");
+    const bytes = await object.arrayBuffer();
+    const uploaded = await uploadToFal(env, getFalKey(env), bytes, asset.content_type, asset.filename);
+    if (uploaded.errorResponse) {
+      const detail = await uploaded.errorResponse.json().catch(() => ({}));
+      throw new Error(getErrorMessage(detail, "Reference upload failed."));
+    }
+    if (String(asset.content_type).startsWith("image/")) urls.images.push(uploaded.url);
+    else if (String(asset.content_type).startsWith("video/")) urls.videos.push(uploaded.url);
+    else if (String(asset.content_type).startsWith("audio/")) urls.audio.push(uploaded.url);
+  }
+  return urls;
+};
+
+const submitWorkflowLiveCreation = async (env, input) => {
+  const falKey = getFalKey(env);
+  if (!falKey) return { ok: false, status: 503, error: "FAL_KEY is not configured." };
+  try {
+    const references = await loadFalReferenceUrls(env, input.userId, input.referenceAssetIds || []);
+    const args = {
+      prompt: input.prompt,
+      aspect_ratio: input.aspectRatio,
+      resolution: input.resolution,
+      duration: input.duration,
+    };
+    if (input.mode === "image" && references.images.length) args.image_references = references.images;
+    if (input.mode === "video") {
+      args.generate_audio = true;
+      if (references.images.length) args.image_references = references.images;
+      if (references.videos.length) args.video_references = references.videos;
+      if (references.audio.length) args.audio_references = references.audio;
+      if (references.images[0]) {
+        args.start_image = references.images[0];
+        args.image_url = references.images[0];
+      }
+      if (references.images[1]) args.end_image = references.images[1];
+    }
+    const task = buildFalTask(input.model, args);
+    if (task?.validationError) return { ok: false, status: 400, error: task.validationError };
+    if (!task || task.provider !== "fal") return { ok: false, status: 501, error: "Selected model is not enabled for the verified fal.ai launch." };
+    task.input.end_user_id = input.userId;
+    const response = await submitFalTask(env, falKey, task);
+    const payload = await response.json().catch(() => ({}));
+    return response.ok
+      ? { ok: true, status: response.status, requestId: payload.request_id, provider: "fal" }
+      : { ok: false, status: response.status, error: getErrorMessage(payload, "Generation request was not accepted.") };
+  } catch (error) {
+    return { ok: false, status: 502, error: error instanceof Error ? error.message : "Generation submission failed." };
+  }
+};
+
+const pollWorkflowLiveCreation = async (env, requestId) => {
+  const falKey = getFalKey(env);
+  const decoded = decodeFalRequestId(requestId);
+  if (!falKey || !decoded) return { ok: false, statusCode: 503, error: "Live generation status is unavailable." };
+  const response = await handleFalStatus(new Request("https://internal.invalid/status"), env, falKey, decoded);
+  const payload = await response.json().catch(() => ({}));
+  return response.ok
+    ? { ok: true, status: payload.status, progress: payload.progress, output: payload.output, error: payload.error }
+    : { ok: false, statusCode: response.status, error: getErrorMessage(payload, "Live generation status failed.") };
+};
+
+const liveGenerationBridge = (env) => ({
+  submit: (input) => submitWorkflowLiveCreation(env, input),
+  poll: (requestId) => pollWorkflowLiveCreation(env, requestId),
+});
+
 const handleStudio = async (request, env, pathname) => {
   const authError = authorizeStudio(request, env);
   if (authError) return authError;
@@ -1380,13 +1455,14 @@ const securityHeaders = (response, requestId) => {
 
 const routeRequest = async (request, env) => {
     const { pathname } = new URL(request.url);
-    if (pathname === "/api/health") return handleWorkflowApi(request, env, "/api/v1/health", { json, getSession, sameOriginMutationError });
-    if (pathname === "/api/health/ready") return handleWorkflowApi(request, env, "/api/v1/health/ready", { json, getSession, sameOriginMutationError });
+    if (pathname === "/api/health") return handleWorkflowApi(request, env, "/api/v1/health", { json, getSession, sameOriginMutationError, liveGeneration: liveGenerationBridge(env) });
+    if (pathname === "/api/health/ready") return handleWorkflowApi(request, env, "/api/v1/health/ready", { json, getSession, sameOriginMutationError, liveGeneration: liveGenerationBridge(env) });
     if (pathname === "/api/auth" || pathname.startsWith("/api/auth/")) return handleAuth(request, env, pathname);
     if (pathname === "/api/v1" || pathname.startsWith("/api/v1/")) return handleWorkflowApi(request, env, pathname, {
       json,
       getSession,
       sameOriginMutationError,
+      liveGeneration: liveGenerationBridge(env),
     });
     if (pathname === "/api/studio" || pathname.startsWith("/api/studio/")) return handleStudio(request, env, pathname);
     const studioRoute = pathname === "/studio" || pathname === "/studio.html" || pathname.startsWith("/studio/");
