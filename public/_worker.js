@@ -58,7 +58,10 @@ const json = (data, status = 200, extraHeaders = {}) => new Response(JSON.string
   },
 });
 
-const getFalKey = (env) => typeof env.FAL_KEY === "string" ? env.FAL_KEY.trim() : "";
+const getFalKey = (env) => {
+  const value = env.FAL_KEY || env.FAL_AI_KEY || env["Fal ai"] || env["Fal AI"];
+  return typeof value === "string" ? value.trim() : "";
+};
 const getKieKey = (env) => typeof env.KIE_API_KEY === "string" ? env.KIE_API_KEY.trim() : "";
 const getOpenAIKey = (env) => typeof env.OPENAI_API_KEY === "string" ? env.OPENAI_API_KEY.trim() : "";
 const getKieApiBase = (env) => (env.KIE_API_BASE_URL || KIE_API_BASE_URL).replace(/\/$/, "");
