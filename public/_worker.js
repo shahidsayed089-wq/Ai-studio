@@ -59,7 +59,7 @@ const json = (data, status = 200, extraHeaders = {}) => new Response(JSON.string
 });
 
 const getFalKey = (env) => {
-  const value = env.FAL_KEY || env.FAL_AI_KEY || env["Fal ai"] || env["Fal AI"];
+  const value = env.FAL_KEY || env.FAL_AI_KEY || env.ENABLE_FAL || env["Fal ai"] || env["Fal AI"];
   return typeof value === "string" ? value.trim() : "";
 };
 const getKieKey = (env) => typeof env.KIE_API_KEY === "string" ? env.KIE_API_KEY.trim() : "";
