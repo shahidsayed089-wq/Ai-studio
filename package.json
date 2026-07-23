@@ -11,7 +11,7 @@
     "preview": "npm run build && wrangler pages dev out",
     "deploy": "npm run build && wrangler pages deploy",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern playwright-report --ignore-pattern test-results",
-    "test": "node --test tests/domain.test.mjs tests/worker.integration.test.mjs",
+    "test": "node --test tests/domain.test.mjs tests/worker.integration.test.mjs tests/live-generation.integration.test.mjs",
     "test:e2e": "playwright test",
     "test:ui-freeze": "node scripts/check-ui-freeze.mjs",
     "scan:client-secrets": "node scripts/scan-client-secrets.mjs out",
