@@ -2,7 +2,7 @@
 
 Production-oriented visual AI workflow application built on Next.js static export, Cloudflare Pages Advanced Mode, D1, R2 and an optional Cloudflare Queue consumer.
 
-The launch-safe provider is **SHAZAN Mock Provider**: it executes the complete persistent workflow, SSE progress, R2 export and atomic credit lifecycle without spending paid API balance. Live fal/Kie/OpenAI/Google/xAI/HeyGen adapters remain server-side and must be enabled only after their queue consumer and pricing have passed staging.
+The public Studio has a verified **fal.ai live rollout** for Nano Banana 2, FLUX 2 Pro, Seedance 2.0 Standard and Seedance 2.0 Fast. The advanced canvas keeps the deterministic Mock Provider for workflow testing. Other paid adapters remain disabled until their exact endpoints, pricing and cancellation behavior pass staging.
 
 ## What works
 
@@ -12,14 +12,14 @@ The launch-safe provider is **SHAZAN Mock Provider**: it executes the complete p
 - Project CRUD, duplicate, auto-save with optimistic conflict detection, version restore and expiring read-only shares.
 - Validated R2 uploads and durable generated assets.
 - D1-persistent async jobs, SSE progress, cancel, retry, automatic exponential backoff and idempotency keys.
-- Atomic 500-credit signup grant, reservation, exactly-once charge, refund and complete ledger.
+- Atomic 400-credit signup grant, server-side per-model estimates, reservation, exactly-once charge, permanent-failure refund and complete ledger.
 - Admin metrics, user status/role, mandatory-reason credit adjustment, provider switches and audit logs.
 - Webhook event deduplication and health endpoint.
 - Server-enforced feature flags; disabled providers reject direct API calls even if a client is modified.
 - D1 job lease locking, heartbeats, expired-lease recovery and durable attempt records.
 - Global CSP/HSTS/security headers, request IDs and redacted structured error/slow-request logs.
 - Current-device and all-device logout; verified `ADMIN_EMAIL` bootstrap without a hardcoded password.
-- Explicit Demo metadata: `Demo Output — no paid AI model was called.`
+- Live results are copied from trusted fal.ai result hosts into the authenticated user's private R2 path.
 
 ## Architecture
 
@@ -64,6 +64,7 @@ npm run test:e2e
 - `migrations/0001_auth.sql` — auth users, sessions and rate limits.
 - `migrations/0002_workflow_studio.sql` — profiles, wallets, ledger, projects, versions, shares, assets, jobs, events, providers, webhooks, audits and atomic credit triggers.
 - `migrations/0003_production_hardening.sql` — feature flags, Runway/MuAPI registry records, durable leases and job-attempt history.
+- `migrations/0005_verified_fal_launch.sql` — enables the reviewed fal.ai provider and feature gate without changing existing user balances.
 
 Apply locally:
 
@@ -117,13 +118,17 @@ Authentication integrations:
 - `RESEND_API_KEY`, `AUTH_EMAIL_FROM` for verification/reset delivery.
 - `ALERT_WEBHOOK_URL`, optional `ALERT_WEBHOOK_TOKEN` for structured API-error and failed-job alerts.
 
-Live provider secrets (server only):
+Live provider configuration (server only):
 
-- `FAL_KEY`, `KIE_API_KEY`, `OPENAI_API_KEY`.
+- `FAL_KEY` — required for the verified live models; never expose it to the browser.
+- `ENABLE_FAL=true` — production feature gate after the key is installed.
+- `LIVE_DAILY_CREDIT_LIMIT=2000` — default global exposure cap (about $20 at 100 credits/USD).
+- `LIVE_USER_DAILY_CREDIT_LIMIT=400` — default per-user daily cap.
+- `KIE_API_KEY`, `OPENAI_API_KEY` remain optional and disabled for public generation.
 
-Public-beta paid capabilities are code-level release-locked off: payments, community, fal, Kie, OpenAI, Google AI, xAI, HeyGen, Runway and MuAPI cannot be enabled by a database/admin toggle. A future reviewed code release must remove that lock. `PUBLIC_BETA`, `ENABLE_DEMO_PROVIDER` and `ENABLE_GOOGLE_AUTH` remain configurable.
+Payments, community, Kie, OpenAI, Google AI, xAI, HeyGen, Runway and MuAPI remain code-level release-locked off. fal.ai is the only reviewed live provider in this release. Email/password users must verify their email before a paid request can start. Provider cancellation is intentionally unavailable until fal cancellation billing behavior passes staging; failed provider jobs are refunded automatically.
 
-The legacy landing generator remains owner-locked by `STUDIO_ACCESS_CODE`; public model cards transfer their prompt/model into the credit-protected Workflow Studio and do not call the legacy paid route.
+The legacy owner bridge remains locked by `STUDIO_ACCESS_CODE`. Public `/studio` generation uses the authenticated D1 job and wallet path; it never sends `FAL_KEY` to the browser.
 
 Never use a `NEXT_PUBLIC_` name for these values and never paste secrets into browser code, GitHub, screenshots or client logs.
 
