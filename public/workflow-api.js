@@ -1428,11 +1428,13 @@ const healthState = async (env) => {
   const googleConfigured = await featureEnabled(env, "ENABLE_GOOGLE_AUTH") && Boolean(clean(env.GOOGLE_CLIENT_ID, 500) && clean(env.GOOGLE_CLIENT_SECRET, 500));
   const emailConfigured = Boolean(clean(env.RESEND_API_KEY, 500) && clean(env.AUTH_EMAIL_FROM, 500));
   const alertsConfigured = Boolean(safeAlertEndpoint(env.ALERT_WEBHOOK_URL));
+  const falEnabled = await featureEnabled(env, "ENABLE_FAL");
+  const falReady = !falEnabled || Boolean(clean(env.FAL_KEY, 500));
   const paidFeaturesClosed = !(await featureEnabled(env, "ENABLE_LIVE_PAYMENTS"))
     && !(await featureEnabled(env, "ENABLE_COMMUNITY"))
-    && await Promise.all(["ENABLE_FAL","ENABLE_KIE","ENABLE_OPENAI","ENABLE_GOOGLE_AI","ENABLE_XAI","ENABLE_HEYGEN","ENABLE_RUNWAY","ENABLE_MUAPI"].map((flag) => featureEnabled(env, flag))).then((states) => states.every((state) => !state));
-  const coreReady = database && assetStorage && mockProvider && authSecurity && paidFeaturesClosed;
-  const launchGates = { cloudflare_queue: queueReady, google_oauth: googleConfigured, transactional_email: emailConfigured, operational_alerts: alertsConfigured, paid_features_closed: paidFeaturesClosed };
+    && await Promise.all(["ENABLE_KIE","ENABLE_OPENAI","ENABLE_GOOGLE_AI","ENABLE_XAI","ENABLE_HEYGEN","ENABLE_RUNWAY","ENABLE_MUAPI"].map((flag) => featureEnabled(env, flag))).then((states) => states.every((state) => !state));
+  const coreReady = database && assetStorage && mockProvider && authSecurity && paidFeaturesClosed && falReady;
+  const launchGates = { cloudflare_queue: queueReady, google_oauth: googleConfigured, transactional_email: emailConfigured, operational_alerts: alertsConfigured, fal_live: falReady, paid_features_closed: paidFeaturesClosed };
   const ready = coreReady && (!production || Object.values(launchGates).every(Boolean));
   return {
     status: ready ? "ok" : "degraded",
@@ -1450,6 +1452,7 @@ const healthState = async (env) => {
     google_auth: googleConfigured,
     email_delivery: emailConfigured,
     error_alerts: alertsConfigured,
+    live_generation: falEnabled ? (falReady ? "fal_ready" : "fal_key_missing") : "disabled",
     live_payments: livePayments ? "configuration_required" : "disabled",
     ready,
     timestamp: new Date().toISOString(),
