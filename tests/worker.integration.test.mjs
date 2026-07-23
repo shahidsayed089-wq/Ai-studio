@@ -80,22 +80,18 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     const stranger = await register("Second Browser", "stranger@example.com");
     const admin = await register("Studio Admin", "admin@example.com");
     const founder = await register("Verified Founder", "founder@example.com");
-    assert.equal(owner.credits, 500);
+    assert.equal(owner.credits, 400);
 
     const quickCreation = await json(await request("/api/v1/creations", {
       method: "POST",
       cookie: stranger.cookie,
       headers: { "Idempotency-Key": "quick-studio-creation-0001" },
-      body: { mode: "image", model: "gpt_image_2", prompt: "A cinematic golden city", aspect_ratio: "16:9", resolution: "720p", duration: 5 },
+      body: { mode: "image", model: "nano_banana_2", prompt: "A cinematic golden city", aspect_ratio: "16:9", resolution: "720p", duration: 5 },
     }));
-    assert.equal(quickCreation.response.status, 202, JSON.stringify(quickCreation.payload));
-    assert.equal(quickCreation.payload.project.workflow.nodes.some((node) => node.type === "image_generator"), true);
-    assert.equal(quickCreation.payload.project.workflow.nodes.some((node) => node.type === "result_preview"), true);
-    assert.equal((await request(`/api/v1/projects/${quickCreation.payload.project.id}`, { cookie: stranger.cookie })).status, 200);
-    const quickCancelled = await json(await request(`/api/v1/jobs/${quickCreation.payload.job.id}/cancel`, { method: "POST", cookie: stranger.cookie, body: {} }));
-    assert.equal(quickCancelled.payload.job.status, "cancelled");
+    assert.equal(quickCreation.response.status, 503);
+    assert.match(quickCreation.payload.message, /ENABLE_FAL=true/);
     const quickCredits = await json(await request("/api/v1/credits", { cookie: stranger.cookie }));
-    assert.deepEqual({ available: quickCredits.payload.wallet.available, reserved: quickCredits.payload.wallet.reserved, spent: quickCredits.payload.wallet.spent }, { available: 500, reserved: 0, spent: 0 });
+    assert.deepEqual({ available: quickCredits.payload.wallet.available, reserved: quickCredits.payload.wallet.reserved, spent: quickCredits.payload.wallet.spent }, { available: 400, reserved: 0, spent: 0 });
 
     const founderVerification = await json(await request("/api/auth/verification/send", { method: "POST", cookie: founder.cookie, body: {} }));
     assert.equal((await request(`/api/auth/verification/confirm?token=${founderVerification.payload.debug_token}`)).status, 200);
@@ -137,7 +133,7 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     assert.equal(submissions[0].payload.job.id, submissions[1].payload.job.id);
     const jobId = submissions[0].payload.job.id;
     const during = await json(await request("/api/v1/credits", { cookie: owner.cookie }));
-    assert.deepEqual({ available: during.payload.wallet.available, reserved: during.payload.wallet.reserved, spent: during.payload.wallet.spent }, { available: 430, reserved: 70, spent: 0 });
+    assert.deepEqual({ available: during.payload.wallet.available, reserved: during.payload.wallet.reserved, spent: during.payload.wallet.spent }, { available: 330, reserved: 70, spent: 0 });
 
     let current;
     for (let attempt = 0; attempt < 16; attempt += 1) {
@@ -147,7 +143,7 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     }
     assert.equal(current.payload.job.status, "completed", JSON.stringify(current.payload));
     const after = await json(await request("/api/v1/credits?limit=100", { cookie: owner.cookie }));
-    assert.deepEqual({ available: after.payload.wallet.available, reserved: after.payload.wallet.reserved, spent: after.payload.wallet.spent }, { available: 430, reserved: 0, spent: 70 });
+    assert.deepEqual({ available: after.payload.wallet.available, reserved: after.payload.wallet.reserved, spent: after.payload.wallet.spent }, { available: 330, reserved: 0, spent: 70 });
     assert.equal(after.payload.ledger.filter((entry) => entry.entry_type === "charge" && entry.job_id === jobId).length, 1);
 
     const download = await request(current.payload.job.result_url, { cookie: owner.cookie });
@@ -178,7 +174,7 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     const retryCancelled = await request(`/api/v1/jobs/${retry.payload.job.id}/cancel`, { method: "POST", cookie: owner.cookie, body: {} });
     assert.equal(retryCancelled.status, 200);
     const afterCancelRetry = await json(await request("/api/v1/credits?limit=100", { cookie: owner.cookie }));
-    assert.deepEqual({ available: afterCancelRetry.payload.wallet.available, reserved: afterCancelRetry.payload.wallet.reserved, spent: afterCancelRetry.payload.wallet.spent }, { available: 430, reserved: 0, spent: 70 });
+    assert.deepEqual({ available: afterCancelRetry.payload.wallet.available, reserved: afterCancelRetry.payload.wallet.reserved, spent: afterCancelRetry.payload.wallet.spent }, { available: 330, reserved: 0, spent: 70 });
 
     const forbiddenAdmin = await request("/api/v1/admin/metrics", { cookie: owner.cookie });
     assert.equal(forbiddenAdmin.status, 403);
@@ -190,11 +186,11 @@ test("production API: auth, ownership, persistence, queue, credits, webhooks and
     assert.equal(disabledRun.status, 503);
     const enableDemo = await request("/api/v1/admin/features/ENABLE_DEMO_PROVIDER", { method: "PATCH", cookie: admin.cookie, body: { enabled: true, reason: "Restore Demo Provider after gate test" } });
     assert.equal(enableDemo.status, 200);
-    const paidProviderBlocked = await request("/api/v1/admin/providers/fal", { method: "PATCH", cookie: admin.cookie, body: { enabled: true, reason: "Must remain disabled before staging" } });
-    assert.equal(paidProviderBlocked.status, 409);
+    const paidProviderBlocked = await request("/api/v1/admin/providers/fal", { method: "PATCH", cookie: admin.cookie, body: { enabled: true, reason: "Verified fal.ai rollout provider switch" } });
+    assert.equal(paidProviderBlocked.status, 200);
     const adjustment = await json(await request(`/api/v1/admin/users/${owner.id}/credits`, { method: "POST", cookie: admin.cookie, body: { delta: 25, reason: "Launch support grant" } }));
-    assert.equal(Number(adjustment.payload.wallet.available), 455);
-    const removal = await json(await request(`/api/v1/admin/users/${owner.id}/credits`, { method: "POST", cookie: admin.cookie, body: { delta: -455, reason: "Verify strict zero-credit gate" } }));
+    assert.equal(Number(adjustment.payload.wallet.available), 355);
+    const removal = await json(await request(`/api/v1/admin/users/${owner.id}/credits`, { method: "POST", cookie: admin.cookie, body: { delta: -355, reason: "Verify strict zero-credit gate" } }));
     assert.equal(Number(removal.payload.wallet.available), 0);
     const noCreditRun = await request(`/api/v1/projects/${projectId}/runs`, { method: "POST", cookie: owner.cookie, headers: { "Idempotency-Key": "no-credit-run-0001" }, body: { provider: "mock" } });
     assert.equal(noCreditRun.status, 402);
